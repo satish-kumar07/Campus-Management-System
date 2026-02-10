@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}CMS - Sessions{% endblock %}
+
+{% block content %}
+  <div class="glass-strong p-4 p-md-5 mb-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div>
+        <h1 class="h5 mb-1">Attendance Sessions</h1>
+        <div class="smart-muted">View all sessions and open details for marking/review.</div>
+      </div>
+      <div class="d-flex gap-2 align-items-center">
+        <a class="btn btn-smart text-white" href="{% url 'create_session' %}">Create Session</a>
+        <a class="btn btn-outline-smart" href="{% url 'manage_dashboard' %}">Back</a>
+      </div>
+    </div>
+    <div class="top-tabs mt-3">
+      <a href="{% url 'manage_students' %}">Students</a>
+      <a href="{% url 'manage_courses' %}">Courses</a>
+      <a href="{% url 'manage_enrollments' %}">Enrollments</a>
+      <a href="{% url 'manage_face_samples' %}">Face Samples</a>
+      <a href="{% url 'manage_sessions' %}">Sessions</a>
+      <a href="{% url 'manage_records' %}">Records</a>
+      <a href="{% url 'manage_notifications' %}">Notifications</a>
+    </div>
+  </div>
+
+  <div class="glass-strong p-3 p-md-4">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 table-clean">
+        <thead>
+          <tr>
+            <th>Course</th>
+            <th>Date</th>
+            <th>Time</th>
+            <th>Label</th>
+            <th>Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in sessions %}
+            <tr>
+              <td class="fw-semibold">{{ s.course.code }} - {{ s.course.name }}</td>
+              <td>{{ s.session_start_at|date:"Y-m-d" }}</td>
+              <td class="smart-muted">{{ s.session_start_at|date:"H:i" }}</td>
+              <td class="smart-muted">{{ s.session_label }}</td>
+              <td class="smart-muted">{{ s.created_at }}</td>
+              <td class="text-end">
+                <a class="btn btn-outline-smart btn-sm" href="{% url 'session_detail' s.id %}">Open</a>
+                <a class="btn btn-outline-smart btn-sm" href="{% url 'manage_records' %}?session={{ s.id }}">Records</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="smart-muted">No sessions yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

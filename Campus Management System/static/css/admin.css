@@ -1,0 +1,188 @@
+:root {
+  --cms-red: #d61f26;
+  --cms-red-dark: #b0121a;
+  --ink: #0b1220;
+  --muted: rgba(11, 18, 32, 0.68);
+  --glass: rgba(255, 255, 255, 0.66);
+  --stroke: rgba(11, 18, 32, 0.10);
+}
+
+/* Force admin into light scheme even if OS/browser prefers dark */
+html, body {
+  color-scheme: light;
+}
+
+body {
+  background: linear-gradient(180deg, #fff 0%, #f6f7fb 45%, #ffffff 100%) !important;
+  color: var(--ink) !important;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  width: 520px;
+  height: 520px;
+  border-radius: 999px;
+  filter: blur(40px);
+  opacity: 0.55;
+  z-index: -1;
+  animation: floaty 14s ease-in-out infinite;
+}
+
+body::before {
+  left: -160px;
+  top: -140px;
+  background: radial-gradient(circle at 30% 30%, rgba(214, 31, 38, 0.55), rgba(244, 180, 0, 0.25), transparent 60%);
+}
+
+body::after {
+  right: -160px;
+  bottom: -160px;
+  background: radial-gradient(circle at 30% 30%, rgba(11, 61, 145, 0.35), rgba(214, 31, 38, 0.20), transparent 60%);
+  animation-duration: 18s;
+}
+
+@keyframes floaty {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(20px, 18px, 0) scale(1.06); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+#header {
+  background: linear-gradient(90deg, var(--cms-red), var(--cms-red-dark)) !important;
+}
+
+#header a:link,
+#header a:visited {
+  color: #fff !important;
+}
+
+#branding h1 {
+  font-weight: 800 !important;
+  letter-spacing: 0.2px;
+}
+
+.module,
+.app-attendance.module,
+#content {
+  background: var(--glass) !important;
+  border: 1px solid var(--stroke) !important;
+  border-radius: 16px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 45px rgba(11, 18, 32, 0.10);
+}
+
+/* Admin index layout spacing */
+.dashboard #content-main {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.dashboard #content {
+  padding: 18px;
+}
+
+.dashboard #content-main .module {
+  padding: 0;
+  overflow: hidden;
+}
+
+.module h2,
+.module caption,
+.inline-group h2 {
+  background: rgba(214, 31, 38, 0.08) !important;
+  color: var(--ink) !important;
+  border-bottom: 1px solid var(--stroke) !important;
+}
+
+.dashboard #content {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Tables & rows (remove dark look) */
+table {
+  background: transparent !important;
+}
+
+th {
+  background: rgba(255, 255, 255, 0.55) !important;
+  color: var(--ink) !important;
+}
+
+td {
+  color: var(--ink) !important;
+}
+
+tr:nth-child(even) td {
+  background: rgba(11, 18, 32, 0.02) !important;
+}
+
+tr:hover td {
+  background: rgba(214, 31, 38, 0.05) !important;
+}
+
+/* Links + buttons */
+a:link,
+a:visited {
+  color: var(--cms-red-dark);
+}
+
+a:hover {
+  color: var(--cms-red);
+}
+
+.button,
+input[type=submit],
+input[type=button],
+.submit-row input[type=submit] {
+  background: linear-gradient(90deg, var(--cms-red), var(--cms-red-dark)) !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+
+.button:hover,
+input[type=submit]:hover,
+.submit-row input[type=submit]:hover {
+  filter: brightness(1.03);
+}
+
+/* Forms */
+input, select, textarea {
+  border-radius: 12px !important;
+}
+
+input, select, textarea {
+  background: rgba(255, 255, 255, 0.75) !important;
+  border: 1px solid rgba(11, 18, 32, 0.14) !important;
+  color: var(--ink) !important;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 0.25rem rgba(214, 31, 38, 0.12) !important;
+  border-color: rgba(214, 31, 38, 0.40) !important;
+}
+
+/* Sidebar / nav (recent actions etc.) */
+#nav-sidebar {
+  background: rgba(255, 255, 255, 0.78) !important;
+  border-right: 1px solid var(--stroke) !important;
+}
+
+#nav-sidebar .current-model {
+  background: rgba(214, 31, 38, 0.08) !important;
+}
+
+/* Remove dark widgets in recent actions box */
+.actionlist {
+  background: transparent !important;
+}
+
+.actionlist li {
+  border-bottom: 1px solid var(--stroke) !important;
+}

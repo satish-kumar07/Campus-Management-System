@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}CMS - Notifications{% endblock %}
+
+{% block content %}
+  <div class="glass-strong p-4 p-md-5 mb-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div>
+        <h1 class="h5 mb-1">Notifications (Simulated)</h1>
+        <div class="smart-muted">Auto-created for absentees (students/parents simulation).</div>
+      </div>
+      <div class="d-flex gap-2 align-items-center">
+        <a class="btn btn-outline-smart" href="{% url 'manage_dashboard' %}">Back</a>
+      </div>
+    </div>
+    <div class="top-tabs mt-3">
+      <a href="{% url 'manage_students' %}">Students</a>
+      <a href="{% url 'manage_courses' %}">Courses</a>
+      <a href="{% url 'manage_enrollments' %}">Enrollments</a>
+      <a href="{% url 'manage_face_samples' %}">Face Samples</a>
+      <a href="{% url 'manage_notifications' %}">Notifications</a>
+    </div>
+  </div>
+
+  <div class="glass-strong p-3 p-md-4">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 table-clean">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Student</th>
+            <th>Message</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for n in notifications %}
+            <tr>
+              <td class="smart-muted">{{ n.created_at }}</td>
+              <td class="fw-semibold">{{ n.recipient_student.roll_no }} - {{ n.recipient_student.full_name }}</td>
+              <td>{{ n.message }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3" class="smart-muted">No notifications yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

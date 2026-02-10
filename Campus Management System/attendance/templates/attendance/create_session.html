@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}CMS - Create Session{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-9 col-xl-8">
+      <div class="form-shell glass-strong">
+        <div class="form-head px-4 px-md-5 pt-4 pt-md-5 pb-3">
+          <div class="h4 mb-1">Create Attendance Session</div>
+          <div class="smart-muted">Setup courses/students/enrollments from <a href="/admin/">Admin</a> first.</div>
+        </div>
+
+        <div class="px-4 px-md-5 pb-4 pb-md-5">
+          <form method="post" class="row g-3">
+            {% csrf_token %}
+
+            <div class="col-12">
+              <label class="form-label">Course:</label>
+              {{ form.course }}
+              {% if form.course.errors %}<div class="text-danger small">{{ form.course.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Session start at:</label>
+              {{ form.session_start_at }}
+              {% if form.session_start_at.errors %}<div class="text-danger small">{{ form.session_start_at.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Session label:</label>
+              {{ form.session_label }}
+              {% if form.session_label.errors %}<div class="text-danger small">{{ form.session_label.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12 d-flex flex-wrap gap-2 mt-2">
+              <button class="btn btn-open" type="submit">Create Session</button>
+              <a class="btn btn-cancel" href="{% url 'attendance_home' %}">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

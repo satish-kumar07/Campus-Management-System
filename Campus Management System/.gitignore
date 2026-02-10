@@ -1,0 +1,21 @@
+.DS_Store
+*.pyc
+__pycache__/
+*.sqlite3
+*.log
+
+# Django
+media/
+staticfiles/
+
+# Virtual env
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.Trash/

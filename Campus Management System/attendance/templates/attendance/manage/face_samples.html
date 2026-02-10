@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}CMS - Face Data{% endblock %}
+
+{% block content %}
+  <div class="glass-strong p-4 p-md-5 mb-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div>
+        <h1 class="h5 mb-1">Face Data</h1>
+        <div class="smart-muted">Upload face images used for recognition.</div>
+      </div>
+      <div class="d-flex gap-2 align-items-center">
+        <a class="btn btn-smart text-white" href="{% url 'manage_face_sample_create' %}">Upload</a>
+        <a class="btn btn-outline-danger" href="{% url 'manage_face_samples_delete_all' %}">Delete All</a>
+        <a class="btn btn-outline-smart" href="{% url 'manage_dashboard' %}">Back</a>
+      </div>
+    </div>
+    <div class="top-tabs mt-3">
+      <a href="{% url 'manage_students' %}">Students</a>
+      <a href="{% url 'manage_courses' %}">Courses</a>
+      <a href="{% url 'manage_enrollments' %}">Enrollments</a>
+      <a href="{% url 'manage_face_samples' %}">Face Data</a>
+      <a href="{% url 'manage_notifications' %}">Notifications</a>
+    </div>
+  </div>
+
+  <div class="glass-strong p-3 p-md-4">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 table-clean">
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Uploaded</th>
+            <th>Preview</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fs in samples %}
+            <tr>
+              <td class="fw-semibold">{{ fs.student.roll_no }} - {{ fs.student.full_name }}</td>
+              <td class="smart-muted">{{ fs.created_at }}</td>
+              <td>
+                {% if fs.image %}
+                  <a href="{{ fs.image.url }}" target="_blank" class="btn btn-outline-smart btn-sm">View</a>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <a class="btn btn-outline-danger btn-sm" href="{% url 'manage_face_sample_delete' face_sample_id=fs.id %}">Delete</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="smart-muted">No face samples yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

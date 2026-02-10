@@ -1,0 +1,276 @@
+{% extends 'base.html' %}
+{% block title %}CMS - {{ title }}{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-10 col-xl-9">
+      <div class="form-shell glass-strong">
+        <div class="form-head px-4 px-md-5 pt-4 pt-md-5 pb-3">
+          <div class="h4 mb-1">{{ title }}</div>
+          <div class="smart-muted">Fill the details and save.</div>
+
+          <div class="manage-tabs mt-3">
+            {% url 'manage_dashboard' as manage_home_url %}
+            {% url 'manage_students' as manage_students_url %}
+            {% url 'manage_courses' as manage_courses_url %}
+            {% url 'manage_enrollments' as manage_enrollments_url %}
+            {% url 'manage_face_samples' as manage_face_url %}
+            {% url 'manage_sessions' as manage_sessions_url %}
+            {% url 'manage_notifications' as manage_notifications_url %}
+
+            <a class="tab-pill {% if request.path == manage_home_url %}is-active{% endif %}" href="{{ manage_home_url }}">Manage Home</a>
+            <a class="tab-pill {% if request.path|slice:':15' == manage_students_url %}is-active{% endif %}" href="{{ manage_students_url }}">Students</a>
+            <a class="tab-pill {% if request.path|slice:':14' == manage_courses_url %}is-active{% endif %}" href="{{ manage_courses_url }}">Courses</a>
+            <a class="tab-pill {% if request.path|slice:':18' == manage_enrollments_url %}is-active{% endif %}" href="{{ manage_enrollments_url }}">Enrollments</a>
+            <a class="tab-pill {% if request.path|slice:':16' == manage_face_url %}is-active{% endif %}" href="{{ manage_face_url }}">Face Data</a>
+            <a class="tab-pill {% if request.path|slice:':14' == manage_sessions_url %}is-active{% endif %}" href="{{ manage_sessions_url }}">Sessions</a>
+            <a class="tab-pill {% if request.path|slice:':19' == manage_notifications_url %}is-active{% endif %}" href="{{ manage_notifications_url }}">Notifications</a>
+          </div>
+        </div>
+
+        <div class="px-4 px-md-5 pb-4 pb-md-5">
+          <form method="post" {% if is_multipart %}enctype="multipart/form-data"{% endif %}>
+            {% csrf_token %}
+
+            {% if enable_camera_capture %}
+              <div class="row g-3">
+                <div class="col-12 col-lg-6">
+                  <div class="mb-3">
+                    <label class="form-label">Student</label>
+                    {{ form.student }}
+                  </div>
+                  <div class="mb-2">
+                    <label class="form-label">Image</label>
+                    {{ form.image }}
+                    <div class="form-text">You can upload a file or capture from camera below.</div>
+                  </div>
+
+                  <div class="d-flex flex-wrap gap-2 mt-3">
+                    <button class="btn btn-cancel" type="button" id="cam-start">Camera</button>
+                    <button class="btn btn-cancel" type="button" id="cam-capture" disabled>Capture</button>
+                    <button class="btn btn-cancel" type="button" id="cam-stop" disabled>Stop</button>
+                  </div>
+
+                  <div class="smart-muted small mt-2" id="cam-status"></div>
+                </div>
+
+                <div class="col-12 col-lg-6">
+                  <div class="glass p-3" style="border-radius: 18px; border: 1px solid rgba(11, 18, 32, 0.10); background: rgba(255,255,255,0.55);">
+                    <div class="ratio ratio-16x9" style="border-radius: 14px; overflow: hidden; position: relative;">
+                      <video id="cam-video" autoplay playsinline muted style="width:100%; height:100%; object-fit: cover;"></video>
+                      <canvas id="cam-overlay" style="position:absolute; inset:0; width:100%; height:100%;"></canvas>
+                    </div>
+                    <canvas id="cam-canvas" class="d-none"></canvas>
+                  </div>
+                </div>
+              </div>
+            {% else %}
+              <div class="row g-3">
+                {% if form.roll_no or form.full_name %}
+                  {% if form.roll_no %}
+                    <div class="col-12 col-md-6">
+                      <label class="form-label">Roll Number</label>
+                      <div class="input-group input-group-soft">
+                        {{ form.roll_no }}
+                        <span class="input-group-text">#</span>
+                      </div>
+                      {% if form.roll_no.errors %}<div class="text-danger small">{{ form.roll_no.errors }}</div>{% endif %}
+                    </div>
+                  {% endif %}
+                  {% if form.email %}
+                    <div class="col-12 col-md-6">
+                      <label class="form-label">Email</label>
+                      <div class="input-group input-group-soft">
+                        {{ form.email }}
+                        <span class="input-group-text">@</span>
+                      </div>
+                      {% if form.email.errors %}<div class="text-danger small">{{ form.email.errors }}</div>{% endif %}
+                    </div>
+                  {% endif %}
+                  {% if form.full_name %}
+                    <div class="col-12 col-md-6">
+                      <label class="form-label">Full Name</label>
+                      {{ form.full_name }}
+                      {% if form.full_name.errors %}<div class="text-danger small">{{ form.full_name.errors }}</div>{% endif %}
+                    </div>
+                  {% endif %}
+                  {% if form.parent_email %}
+                    <div class="col-12 col-md-6">
+                      <label class="form-label">Parent Email</label>
+                      <div class="input-group input-group-soft">
+                        {{ form.parent_email }}
+                        <span class="input-group-text">@</span>
+                      </div>
+                      {% if form.parent_email.errors %}<div class="text-danger small">{{ form.parent_email.errors }}</div>{% endif %}
+                    </div>
+                  {% endif %}
+                  {% if form.parent_phone %}
+                    <div class="col-12 col-md-6">
+                      <label class="form-label">Parent Phone</label>
+                      <div class="input-group input-group-soft">
+                        {{ form.parent_phone }}
+                        <span class="input-group-text">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.3 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7 12.8 12.8 0 0 0 .7 2.8 2 2 0 0 1-.5 2.1L8.1 9.8a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5 12.8 12.8 0 0 0 2.8.7 2 2 0 0 1 1.7 2.1z"></path>
+                          </svg>
+                        </span>
+                      </div>
+                      {% if form.parent_phone.errors %}<div class="text-danger small">{{ form.parent_phone.errors }}</div>{% endif %}
+                    </div>
+                  {% endif %}
+                {% else %}
+                  {% for field in form %}
+                    <div class="col-12 col-md-6">
+                      <label class="form-label">{{ field.label }}</label>
+                      {{ field }}
+                      {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+                    </div>
+                  {% endfor %}
+                {% endif %}
+              </div>
+            {% endif %}
+
+            <div class="d-flex gap-2 mt-4">
+              <button class="btn btn-open" type="submit">Save</button>
+              <a class="btn btn-cancel" href="{% url 'manage_dashboard' %}">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ block.super }}
+  {% if enable_camera_capture %}
+    <script>
+      (function () {
+        const startBtn = document.getElementById('cam-start');
+        const stopBtn = document.getElementById('cam-stop');
+        const captureBtn = document.getElementById('cam-capture');
+        const statusEl = document.getElementById('cam-status');
+        const video = document.getElementById('cam-video');
+        const overlay = document.getElementById('cam-overlay');
+        const canvas = document.getElementById('cam-canvas');
+        const fileInput = document.getElementById('id_image');
+
+        if (!startBtn || !video || !fileInput) return;
+
+        let stream = null;
+        let rafId = null;
+        let detector = null;
+
+        const setStatus = (msg) => {
+          if (statusEl) statusEl.textContent = msg;
+        };
+
+        const clearOverlay = () => {
+          const ctx = overlay.getContext('2d');
+          ctx.clearRect(0, 0, overlay.width, overlay.height);
+        };
+
+        const resizeCanvases = () => {
+          const rect = overlay.getBoundingClientRect();
+          overlay.width = Math.floor(rect.width);
+          overlay.height = Math.floor(rect.height);
+        };
+
+        const drawBoxes = (faces) => {
+          resizeCanvases();
+          const ctx = overlay.getContext('2d');
+          ctx.clearRect(0, 0, overlay.width, overlay.height);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = 'rgba(214, 31, 38, 0.95)';
+          ctx.fillStyle = 'rgba(214, 31, 38, 0.12)';
+
+          for (const face of faces) {
+            const b = face.boundingBox;
+            ctx.fillRect(b.x, b.y, b.width, b.height);
+            ctx.strokeRect(b.x, b.y, b.width, b.height);
+          }
+        };
+
+        const loopDetect = async () => {
+          if (!detector) return;
+          try {
+            const rect = overlay.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) {
+              rafId = requestAnimationFrame(loopDetect);
+              return;
+            }
+            resizeCanvases();
+            const faces = await detector.detect(video);
+            drawBoxes(faces);
+          } catch (e) {
+            // ignore
+          }
+          rafId = requestAnimationFrame(loopDetect);
+        };
+
+        const startCamera = async () => {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+            video.srcObject = stream;
+            captureBtn.disabled = false;
+            stopBtn.disabled = false;
+            setStatus('Camera started. Align your face and click Capture.');
+
+            if ('FaceDetector' in window) {
+              try {
+                detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+                rafId = requestAnimationFrame(loopDetect);
+              } catch (e) {
+                detector = null;
+              }
+            }
+          } catch (e) {
+            setStatus('Camera permission denied or camera not available.');
+          }
+        };
+
+        const stopCamera = () => {
+          if (rafId) cancelAnimationFrame(rafId);
+          rafId = null;
+          detector = null;
+          clearOverlay();
+          if (stream) {
+            for (const t of stream.getTracks()) t.stop();
+          }
+          stream = null;
+          video.srcObject = null;
+          captureBtn.disabled = true;
+          stopBtn.disabled = true;
+          setStatus('Camera stopped.');
+        };
+
+        const capture = async () => {
+          if (!stream) return;
+          const w = video.videoWidth;
+          const h = video.videoHeight;
+          if (!w || !h) return;
+
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, w, h);
+
+          canvas.toBlob((blob) => {
+            if (!blob) return;
+            const file = new File([blob], 'face-sample.jpg', { type: 'image/jpeg' });
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            fileInput.files = dt.files;
+            setStatus('Captured and loaded into Image field. Now click Save.');
+          }, 'image/jpeg', 0.92);
+        };
+
+        startBtn.addEventListener('click', startCamera);
+        stopBtn.addEventListener('click', stopCamera);
+        captureBtn.addEventListener('click', capture);
+
+        window.addEventListener('beforeunload', stopCamera);
+      })();
+    </script>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load i18n static %}
+{% block title %}CMS - Admin Login{% endblock %}
+
+{% block shell_class %}d-block{% endblock %}
+{% block sidebar %}{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-md-9 col-lg-5">
+      <div class="glass-strong p-4 p-md-5 mb-4">
+        <div class="d-flex align-items-center justify-content-between gap-3">
+          <div class="d-flex align-items-center gap-3">
+            <div>
+              <h1 class="h3 mb-1">CMS</h1>
+              <div class="smart-muted">Admin sign in (Django Admin).</div>
+            </div>
+          </div>
+          <a class="btn btn-outline-smart btn-sm" href="/accounts/login/">Close</a>
+        </div>
+      </div>
+
+      <div class="glass-strong p-4">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <div class="fw-semibold">Admin Login</div>
+          <span class="badge badge-soft">CMS</span>
+        </div>
+
+        {% if form.errors and not form.non_field_errors %}
+          <div class="alert alert-danger">Invalid admin username or password.</div>
+        {% endif %}
+        {% if form.non_field_errors %}
+          {% for error in form.non_field_errors %}
+            <div class="alert alert-danger">{{ error }}</div>
+          {% endfor %}
+        {% endif %}
+
+        <form action="{{ app_path }}" method="post" id="login-form">
+          {% csrf_token %}
+          <div class="mb-3">
+            {{ form.username.errors }}
+            <label class="form-label" for="id_username">Username</label>
+            <input class="form-control" type="text" name="username" autofocus required id="id_username" />
+          </div>
+          <div class="mb-3">
+            {{ form.password.errors }}
+            <label class="form-label" for="id_password">Password</label>
+            <input class="form-control" type="password" name="password" required id="id_password" />
+            <input type="hidden" name="next" value="{{ next }}" />
+          </div>
+
+          <div class="d-grid">
+            <button class="btn btn-smart text-white fw-semibold" type="submit">Log In</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endblock %}

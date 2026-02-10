@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}CMS - Delete{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+      <div class="glass-strong p-4 p-md-5">
+        <h1 class="h5 mb-2">Delete {{ type }}?</h1>
+        <div class="smart-muted mb-3">This action cannot be undone.</div>
+
+        <div class="glass p-3 mb-3" style="border-radius: 16px; border: 1px solid rgba(11, 18, 32, 0.10); background: rgba(255,255,255,0.55);">
+          {% if type == 'Student' %}
+            <div class="fw-semibold">{{ object.roll_no }} - {{ object.full_name }}</div>
+            <div class="smart-muted small">{{ object.email }}</div>
+          {% elif type == 'Course' %}
+            <div class="fw-semibold">{{ object.code }} - {{ object.name }}</div>
+          {% elif object %}
+            <div class="fw-semibold">{{ object.student.roll_no }} - {{ object.student.full_name }}</div>
+            {% if object.image %}
+              <div class="smart-muted small">{{ object.image.name }}</div>
+            {% endif %}
+          {% else %}
+            <div class="fw-semibold">This will delete all face data items.</div>
+          {% endif %}
+        </div>
+
+        <form method="post">
+          {% csrf_token %}
+          <div class="d-flex gap-2">
+            <button class="btn btn-danger fw-semibold" type="submit">Yes, Delete</button>
+            <a class="btn btn-outline-smart" href="{% url cancel_url|default:'manage_dashboard' %}">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endblock %}

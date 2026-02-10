@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}CMS - Attendance{% endblock %}
+
+{% block content %}
+  <div class="attendance-hero glass-strong p-4 p-md-5 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+      <div>
+        <div class="display-6 mb-1">Attendance</div>
+        <div class="smart-muted">Create sessions, view recent sessions, and mark attendance.</div>
+      </div>
+      <div>
+        <a class="btn btn-open" href="{% url 'create_session' %}">Create Session</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="attendance-card glass-strong p-3 p-md-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <div class="fw-semibold">Recent Sessions</div>
+      <div class="d-flex align-items-center gap-2">
+        <div class="search-pill">
+          <span class="search-ico">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="M21 21l-4.3-4.3"></path>
+            </svg>
+          </span>
+          <input id="sessionSearch" class="search-input" type="text" placeholder="Search sessions..." />
+        </div>
+        <div class="smart-muted small">Latest 20</div>
+      </div>
+    </div>
+    {% if sessions %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 table-clean">
+          <thead>
+            <tr>
+              <th>Course Code</th>
+              <th>Course Name</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="sessionsTbody">
+            {% for s in sessions %}
+              <tr class="session-row" data-search="{{ s.course.code }} {{ s.course.name }} {{ s.session_start_at|date:'Y-m-d' }} {{ s.session_start_at|date:'H:i' }}">
+                <td class="fw-semibold">{{ s.course.code }}</td>
+                <td class="smart-muted">{{ s.course.name }}</td>
+                <td>{{ s.session_start_at|date:"Y-m-d" }}</td>
+                <td class="smart-muted">{{ s.session_start_at|date:"H:i" }}</td>
+                <td class="text-end">
+                  <div class="d-inline-flex gap-2">
+                    <a class="btn btn-soft-blue btn-sm" href="{% url 'session_detail' session_id=s.id %}">View</a>
+                    <a class="btn btn-soft-danger btn-sm" href="{% url 'delete_session' session_id=s.id %}">Delete</a>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="text-center smart-muted small mt-3">Showing latest 20 sessions</div>
+    {% else %}
+      <p class="smart-muted mb-0">No sessions yet. Create your first session to start marking attendance.</p>
+    {% endif %}
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      const input = document.getElementById('sessionSearch');
+      if (!input) return;
+      const rows = Array.from(document.querySelectorAll('.session-row'));
+      input.addEventListener('input', function () {
+        const q = (input.value || '').toLowerCase().trim();
+        rows.forEach(function (row) {
+          const hay = (row.getAttribute('data-search') || '').toLowerCase();
+          row.style.display = hay.indexOf(q) !== -1 ? '' : 'none';
+        });
+      });
+    })();
+  </script>
+{% endblock %}

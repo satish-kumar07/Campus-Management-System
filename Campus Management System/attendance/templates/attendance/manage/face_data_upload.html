@@ -1,0 +1,245 @@
+{% extends 'base.html' %}
+{% block title %}CMS - Upload Face Data{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-10 col-xl-9">
+      <div class="form-shell glass-strong">
+        <div class="form-head px-4 px-md-5 pt-4 pt-md-5 pb-3">
+          <div class="h4 mb-1">Upload Face Data</div>
+          <div class="smart-muted">Add 5-10 photos per student for better recognition.</div>
+
+          <div class="manage-tabs mt-3">
+            {% url 'manage_dashboard' as manage_home_url %}
+            {% url 'manage_students' as manage_students_url %}
+            {% url 'manage_courses' as manage_courses_url %}
+            {% url 'manage_enrollments' as manage_enrollments_url %}
+            {% url 'manage_face_samples' as manage_face_url %}
+            {% url 'manage_sessions' as manage_sessions_url %}
+            {% url 'manage_notifications' as manage_notifications_url %}
+
+            <a class="tab-pill" href="{{ manage_home_url }}">Manage Home</a>
+            <a class="tab-pill" href="{{ manage_students_url }}">Students</a>
+            <a class="tab-pill" href="{{ manage_courses_url }}">Courses</a>
+            <a class="tab-pill" href="{{ manage_enrollments_url }}">Enrollments</a>
+            <a class="tab-pill is-active" href="{{ manage_face_url }}">Face Data</a>
+            <a class="tab-pill" href="{{ manage_sessions_url }}">Sessions</a>
+            <a class="tab-pill" href="{{ manage_notifications_url }}">Notifications</a>
+          </div>
+        </div>
+
+        <div class="px-4 px-md-5 pb-4 pb-md-5">
+          <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <div class="row g-3">
+              <div class="col-12 col-lg-6">
+                <div class="mb-3">
+                  <label class="form-label">Student</label>
+                  {{ form.student }}
+                </div>
+
+                <div class="mb-2">
+                  <label class="form-label">Images (5-10)</label>
+                  {{ form.images }}
+                  <div class="form-text">Select 5-10 images or capture 5-10 photos from camera below.</div>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                  <button class="btn btn-cancel" type="button" id="cam-start">Camera</button>
+                  <button class="btn btn-cancel" type="button" id="cam-capture" disabled>Capture</button>
+                  <button class="btn btn-cancel" type="button" id="cam-stop" disabled>Stop</button>
+                  <button class="btn btn-cancel" type="button" id="cam-clear">Clear</button>
+                </div>
+
+                <div class="smart-muted small mt-2" id="cam-status"></div>
+              </div>
+
+              <div class="col-12 col-lg-6">
+                <div class="glass p-3" style="border-radius: 18px; border: 1px solid rgba(11, 18, 32, 0.10); background: rgba(255,255,255,0.55);">
+                  <div class="ratio ratio-16x9" style="border-radius: 14px; overflow: hidden; position: relative;">
+                    <video id="cam-video" autoplay playsinline muted style="width:100%; height:100%; object-fit: cover;"></video>
+                    <canvas id="cam-overlay" style="position:absolute; inset:0; width:100%; height:100%;"></canvas>
+                  </div>
+                  <canvas id="cam-canvas" class="d-none"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <div class="d-flex gap-2 mt-4">
+              <button class="btn btn-open" type="submit" id="save-btn" disabled>Save</button>
+              <a class="btn btn-cancel" href="{% url 'manage_face_samples' %}">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ block.super }}
+  <script>
+    (function () {
+      const startBtn = document.getElementById('cam-start');
+      const stopBtn = document.getElementById('cam-stop');
+      const captureBtn = document.getElementById('cam-capture');
+      const clearBtn = document.getElementById('cam-clear');
+      const saveBtn = document.getElementById('save-btn');
+      const statusEl = document.getElementById('cam-status');
+      const video = document.getElementById('cam-video');
+      const overlay = document.getElementById('cam-overlay');
+      const canvas = document.getElementById('cam-canvas');
+      const fileInput = document.getElementById('id_images');
+
+      if (!fileInput || !saveBtn) return;
+
+      let stream = null;
+      let rafId = null;
+      let detector = null;
+      const dt = new DataTransfer();
+
+      const setStatus = (msg) => {
+        if (statusEl) statusEl.textContent = msg;
+      };
+
+      const updateSaveState = () => {
+        const count = fileInput.files ? fileInput.files.length : 0;
+        saveBtn.disabled = !(count >= 5 && count <= 10);
+        setStatus(count ? `Selected ${count}/10 photos.` : 'Select or capture 5-10 photos.');
+      };
+
+      const resizeOverlay = () => {
+        const rect = overlay.getBoundingClientRect();
+        overlay.width = Math.floor(rect.width);
+        overlay.height = Math.floor(rect.height);
+      };
+
+      const clearOverlay = () => {
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+      };
+
+      const drawBoxes = (faces) => {
+        resizeOverlay();
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(214, 31, 38, 0.95)';
+        ctx.fillStyle = 'rgba(214, 31, 38, 0.12)';
+        for (const face of faces) {
+          const b = face.boundingBox;
+          ctx.fillRect(b.x, b.y, b.width, b.height);
+          ctx.strokeRect(b.x, b.y, b.width, b.height);
+        }
+      };
+
+      const loopDetect = async () => {
+        if (!detector) return;
+        try {
+          const rect = overlay.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0) {
+            rafId = requestAnimationFrame(loopDetect);
+            return;
+          }
+          resizeOverlay();
+          const faces = await detector.detect(video);
+          drawBoxes(faces);
+        } catch (e) {
+          // ignore
+        }
+        rafId = requestAnimationFrame(loopDetect);
+      };
+
+      const startCamera = async () => {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+          video.srcObject = stream;
+          captureBtn.disabled = false;
+          stopBtn.disabled = false;
+
+          if ('FaceDetector' in window) {
+            try {
+              detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+              rafId = requestAnimationFrame(loopDetect);
+            } catch (e) {
+              detector = null;
+            }
+          }
+        } catch (e) {
+          setStatus('Camera permission denied or camera not available.');
+        }
+      };
+
+      const stopCamera = () => {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+        detector = null;
+        clearOverlay();
+        if (stream) {
+          for (const t of stream.getTracks()) t.stop();
+        }
+        stream = null;
+        video.srcObject = null;
+        captureBtn.disabled = true;
+        stopBtn.disabled = true;
+      };
+
+      const setFiles = () => {
+        fileInput.files = dt.files;
+        updateSaveState();
+      };
+
+      const clearFiles = () => {
+        while (dt.items.length) dt.items.remove(0);
+        setFiles();
+      };
+
+      const capture = () => {
+        if (!stream) return;
+        if (dt.items.length >= 10) {
+          setStatus('You can only capture up to 10 photos.');
+          return;
+        }
+        const w = video.videoWidth;
+        const h = video.videoHeight;
+        if (!w || !h) return;
+
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, w, h);
+
+        canvas.toBlob((blob) => {
+          if (!blob) return;
+          const idx = dt.items.length + 1;
+          const file = new File([blob], `face-${idx}.jpg`, { type: 'image/jpeg' });
+          dt.items.add(file);
+          setFiles();
+          if (dt.items.length >= 5) {
+            setStatus(`Captured ${dt.items.length}/10 photos. You can save now.`);
+          } else {
+            setStatus(`Captured ${dt.items.length}/10 photos. Capture at least 5.`);
+          }
+        }, 'image/jpeg', 0.92);
+      };
+
+      fileInput.addEventListener('change', () => {
+        const files = Array.from(fileInput.files || []);
+        while (dt.items.length) dt.items.remove(0);
+        for (const f of files.slice(0, 10)) {
+          dt.items.add(f);
+        }
+        setFiles();
+      });
+
+      if (startBtn) startBtn.addEventListener('click', startCamera);
+      if (stopBtn) stopBtn.addEventListener('click', stopCamera);
+      if (captureBtn) captureBtn.addEventListener('click', capture);
+      if (clearBtn) clearBtn.addEventListener('click', clearFiles);
+      window.addEventListener('beforeunload', stopCamera);
+
+      updateSaveState();
+    })();
+  </script>
+{% endblock %}
