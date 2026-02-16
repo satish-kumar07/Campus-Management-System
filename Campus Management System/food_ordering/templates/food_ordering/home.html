@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+
+{% block title %}Food Ordering{% endblock %}
+
+{% block content %}
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h3 class="mb-1">Food Ordering</h3>
+      <div class="text-muted">Order food anytime during college hours.</div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-6">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="d-flex gap-2 align-items-start">
+            <div class="nav-ico text-success">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"></path>
+                <path d="M7 6v14"></path>
+                <path d="M17 6v14"></path>
+                <path d="M7 10h10"></path>
+              </svg>
+            </div>
+            <div>
+              <div class="fw-semibold mb-1">Browse Stalls & Menu</div>
+              <div class="text-muted mb-3">See available food stalls and items.</div>
+              <a class="btn btn-smart text-white" href="{% url 'food_stalls_list' %}">View Stalls</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="d-flex gap-2 align-items-start">
+            <div class="nav-ico text-danger">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="5" y="3" width="14" height="18" rx="2"></rect>
+                <path d="M9 7h6"></path>
+                <path d="M9 11h6"></path>
+                <path d="M9 15h4"></path>
+              </svg>
+            </div>
+            <div>
+              <div class="fw-semibold mb-1">My Orders</div>
+              <div class="text-muted mb-3">Track placed orders.</div>
+              <a class="btn btn-outline-smart" href="{% url 'food_my_orders' %}">View Orders</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="d-flex gap-2 align-items-start">
+            <div class="nav-ico text-warning">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2l3 7h7l-5.5 4.1L18 21l-6-4-6 4 1.5-7.9L2 9h7z"></path>
+              </svg>
+            </div>
+            <div>
+              <div class="fw-semibold mb-1">Recommended Items</div>
+              <div class="text-muted mb-3">Popular and recommended food items.</div>
+              <button class="btn btn-smart text-white" type="button" disabled>Explore Items</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="d-flex gap-2 align-items-start">
+            <div class="nav-ico">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 3h8"></path>
+                <path d="M9 7h6"></path>
+                <path d="M8 21h8"></path>
+                <path d="M7 21c0-6 10-6 10 0"></path>
+              </svg>
+            </div>
+            <div>
+              <div class="fw-semibold mb-1">Meal Deals</div>
+              <div class="text-muted mb-3">Special combo offers and discounts.</div>
+              <button class="btn btn-outline-smart" type="button" disabled>Browse Deals</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="d-flex gap-2 align-items-start">
+            <div class="nav-ico text-primary">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"></circle>
+                <path d="M12 7v6l4 2"></path>
+              </svg>
+            </div>
+            <div>
+              <div class="fw-semibold mb-1">Order History</div>
+              <div class="text-muted mb-3">View your past orders and re-order favorites.</div>
+              <a class="btn btn-outline-smart" href="{% url 'food_my_orders' %}">View History</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="fw-semibold mb-1">How it works</div>
+          <div class="text-muted">
+            Choose a stall, select items, and confirm your order. Capacity can be limited per stall to reduce crowd congestion.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

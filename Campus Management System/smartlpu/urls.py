@@ -26,6 +26,7 @@ admin.site.index_title = 'CMS Administration'
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('django.contrib.auth.urls')),
+    path('food/', include('food_ordering.urls')),
     path('', include('attendance.urls')),
 ]
 

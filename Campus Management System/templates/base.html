@@ -33,6 +33,7 @@
           <div class="nav-soft d-grid gap-1">
             {% url 'home' as home_url %}
             {% url 'attendance_home' as attendance_url %}
+            {% url 'food_home' as food_url %}
             {% url 'manage_dashboard' as manage_url %}
             <a href="{{ home_url }}" class="nav-link-soft {% if request.path == home_url %}is-active{% endif %}">
               <div class="nav-ico">
@@ -56,6 +57,20 @@
               </div>
               <div class="nav-text">
                 <div class="nav-title">Attendance</div>
+              </div>
+            </a>
+            <a href="{{ food_url }}" class="nav-link-soft {% if request.path|slice:':6' == '/food/' %}is-active{% endif %}">
+              <div class="nav-ico">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 3h16"></path>
+                  <path d="M6 3v7a6 6 0 0 0 12 0V3"></path>
+                  <path d="M6 14h12"></path>
+                  <path d="M8 14v7"></path>
+                  <path d="M16 14v7"></path>
+                </svg>
+              </div>
+              <div class="nav-text">
+                <div class="nav-title">Food Ordering</div>
               </div>
             </a>
             <a href="{{ manage_url }}" class="nav-link-soft {% if request.path|slice:':7' == manage_url %}is-active{% endif %}">

@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block title %}My Food Orders{% endblock %}
+
+{% block content %}
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h3 class="mb-1">My Orders</h3>
+      {% if student %}
+        <div class="text-muted">{{ student.roll_no }} - {{ student.full_name }}</div>
+      {% else %}
+        <div class="text-muted">Orders placed from this account.</div>
+      {% endif %}
+    </div>
+    <div>
+      <a class="btn btn-outline-smart" href="{% url 'food_home' %}">Back</a>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      {% if orders %}
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Stall</th>
+                <th>Status</th>
+                <th class="text-end">Items</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for o in orders %}
+                <tr>
+                  <td>#{{ o.id }}</td>
+                  <td>{{ o.stall.name }}</td>
+                  <td>{{ o.get_status_display }}</td>
+                  <td class="text-end">{{ o.total_items }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-muted">No orders yet.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

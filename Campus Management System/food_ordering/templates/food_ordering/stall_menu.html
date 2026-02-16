@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ stall.name }} Menu{% endblock %}
+
+{% block content %}
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h3 class="mb-1">{{ stall.name }}</h3>
+      {% if stall.location %}
+        <div class="text-muted">{{ stall.location }}</div>
+      {% endif %}
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-smart" href="{% url 'food_stalls_list' %}">Back</a>
+      <a class="btn btn-smart text-white" href="{% url 'food_preorder' stall.id %}">Pre-order</a>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      {% if categories or uncategorized_items %}
+        {% if categories %}
+          {% for cat in categories %}
+            <div class="fw-semibold mb-2">{{ cat.name }}</div>
+            {% if cat.items.all %}
+              <div class="table-responsive mb-3">
+                <table class="table align-middle">
+                  <thead>
+                    <tr>
+                      <th>Item</th>
+                      <th class="text-end">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for it in cat.items.all %}
+                      <tr>
+                        <td>{{ it.name }}</td>
+                        <td class="text-end">₹{{ it.price }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+
+        {% if uncategorized_items %}
+          <div class="fw-semibold mb-2">Other</div>
+          <div class="table-responsive">
+            <table class="table align-middle">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th class="text-end">Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for it in uncategorized_items %}
+                  <tr>
+                    <td>{{ it.name }}</td>
+                    <td class="text-end">₹{{ it.price }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      {% else %}
+        <div class="text-muted">No menu items yet. Add them from the Admin panel.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

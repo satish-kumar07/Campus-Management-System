@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+
+{% block title %}Pre-order - {{ stall.name }}{% endblock %}
+
+{% block content %}
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h3 class="mb-1">Pre-order</h3>
+      <div class="text-muted">{{ stall.name }}</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-smart" href="{% url 'food_stall_menu' stall.id %}">Back</a>
+    </div>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+
+    <div class="row g-3">
+      <div class="col-12 col-lg-4">
+        <div class="card shadow-sm position-sticky" style="top: 16px;">
+          <div class="card-body">
+            <div class="fw-semibold mb-2">Bill</div>
+
+            {% if form.non_field_errors %}
+              <div class="text-danger small mb-2">{{ form.non_field_errors|striptags }}</div>
+            {% endif %}
+
+            <div id="billEmpty" class="text-muted">No items selected.</div>
+            <div id="billList" class="list-group mb-3" style="display:none;"></div>
+
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="text-muted">Total</div>
+              <div class="fw-semibold">₹<span id="billTotal">0.00</span></div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mt-1">
+              <div class="text-muted">Items</div>
+              <div class="fw-semibold"><span id="billItems">0</span></div>
+            </div>
+
+            <div class="d-grid mt-3">
+              <button class="btn btn-smart text-white" type="submit">Place Order</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-lg-8">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <div class="fw-semibold mb-2">Menu</div>
+
+            {% if items %}
+              <div class="table-responsive">
+                <table class="table align-middle">
+                  <thead>
+                    <tr>
+                      <th>Item</th>
+                      <th class="text-end">Price</th>
+                      <th style="width: 140px;" class="text-end">Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for it in items %}
+                      <tr>
+                        <td>
+                          <div class="fw-semibold">{{ it.name }}</div>
+                        </td>
+                        <td class="text-end">₹{{ it.price }}</td>
+                        <td class="text-end">
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            name="qty_{{ it.id }}"
+                            class="form-control form-control-sm text-end js-qty"
+                            value="0"
+                            data-item-id="{{ it.id }}"
+                            data-item-name="{{ it.name|escapejs }}"
+                            data-item-price="{{ it.price }}"
+                          />
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="text-muted">No items available for this stall.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+{% endblock %}
+
+{% block scripts %}
+  {{ block.super }}
+  <script>
+    (function () {
+      const qtyInputs = Array.from(document.querySelectorAll('.js-qty'));
+      const billList = document.getElementById('billList');
+      const billEmpty = document.getElementById('billEmpty');
+      const billTotal = document.getElementById('billTotal');
+      const billItems = document.getElementById('billItems');
+
+      function toNumber(v) {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      }
+
+      function renderBill() {
+        let total = 0;
+        let items = 0;
+        const lines = [];
+
+        for (const el of qtyInputs) {
+          const qty = Math.max(0, parseInt(el.value || '0', 10) || 0);
+          if (qty <= 0) continue;
+          const name = el.dataset.itemName || 'Item';
+          const price = toNumber(el.dataset.itemPrice);
+          const lineTotal = price * qty;
+          items += qty;
+          total += lineTotal;
+          lines.push({ name, qty, lineTotal });
+        }
+
+        if (!billList || !billEmpty || !billTotal || !billItems) return;
+        billItems.textContent = String(items);
+        billTotal.textContent = total.toFixed(2);
+
+        if (lines.length === 0) {
+          billList.style.display = 'none';
+          billEmpty.style.display = 'block';
+          billList.innerHTML = '';
+          return;
+        }
+
+        billEmpty.style.display = 'none';
+        billList.style.display = 'block';
+        billList.innerHTML = lines
+          .map(
+            (l) =>
+              `<div class="list-group-item d-flex justify-content-between align-items-center">` +
+              `<div><div class="fw-semibold">${l.name}</div><div class="text-muted small">Qty: ${l.qty}</div></div>` +
+              `<div class="fw-semibold">₹${l.lineTotal.toFixed(2)}</div>` +
+              `</div>`
+          )
+          .join('');
+      }
+
+      qtyInputs.forEach((el) => {
+        el.addEventListener('input', renderBill);
+        el.addEventListener('change', renderBill);
+      });
+      renderBill();
+    })();
+  </script>
+{% endblock %}
