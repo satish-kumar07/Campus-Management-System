@@ -13,7 +13,7 @@
       {% endif %}
     </div>
     <div>
-      <a class="btn btn-outline-smart" href="{% url 'food_home' %}">Back</a>
+      <a class="btn btn-outline-dark" href="{% url 'food_home' %}">Back</a>
     </div>
   </div>
 
@@ -27,6 +27,7 @@
                 <th>Order</th>
                 <th>Stall</th>
                 <th>Status</th>
+                <th>Pickup Code</th>
                 <th class="text-end">Items</th>
               </tr>
             </thead>
@@ -36,6 +37,7 @@
                   <td>#{{ o.id }}</td>
                   <td>{{ o.stall.name }}</td>
                   <td>{{ o.get_status_display }}</td>
+                  <td><span class="badge text-bg-secondary">{{ o.pickup_code|default:'-' }}</span></td>
                   <td class="text-end">{{ o.total_items }}</td>
                 </tr>
               {% endfor %}

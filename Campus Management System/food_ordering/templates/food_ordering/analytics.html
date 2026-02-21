@@ -1,0 +1,198 @@
+{% extends 'base.html' %}
+
+{% block title %}Order Analytics{% endblock %}
+
+{% block head %}
+  {% if autorefresh %}
+    <meta http-equiv="refresh" content="{{ refresh_seconds }}" />
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-4">
+    <div>
+      <h3 class="fw-bold mb-1">Order Analytics</h3>
+      <p class="text-muted mb-0">Visualize order patterns and peak times</p>
+      <div class="text-muted small">Last updated: {{ last_updated|date:"Y-m-d H:i:s" }}</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-dark" href="{% url 'food_home' %}">Back</a>
+      {% if is_admin %}
+        <a class="btn btn-outline-dark" href="{% url 'admin:index' %}">Admin</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Date Range Filter -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <span class="text-muted">Time Range:</span>
+        <div class="btn-group">
+          <a href="?days=7" class="btn btn-sm {% if days == 7 %}btn-dark{% else %}btn-outline-dark{% endif %}">7 Days</a>
+          <a href="?days=14" class="btn btn-sm {% if days == 14 %}btn-dark{% else %}btn-outline-dark{% endif %}">14 Days</a>
+          <a href="?days=30" class="btn btn-sm {% if days == 30 %}btn-dark{% else %}btn-outline-dark{% endif %}">30 Days</a>
+          <a href="?days=90" class="btn btn-sm {% if days == 90 %}btn-dark{% else %}btn-outline-dark{% endif %}">90 Days</a>
+        </div>
+        <div class="vr d-none d-md-block"></div>
+        <span class="text-muted">Auto-refresh:</span>
+        <div class="btn-group">
+          <a href="?days={{ days }}&autorefresh=1&refresh_seconds={{ refresh_seconds }}" class="btn btn-sm {% if autorefresh %}btn-dark{% else %}btn-outline-dark{% endif %}">On</a>
+          <a href="?days={{ days }}&autorefresh=0&refresh_seconds={{ refresh_seconds }}" class="btn btn-sm {% if not autorefresh %}btn-dark{% else %}btn-outline-dark{% endif %}">Off</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body text-center">
+          <div class="text-muted small mb-1">Total Orders</div>
+          <div class="h3 fw-bold mb-0">{{ summary.total_orders|default:"0" }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body text-center">
+          <div class="text-muted small mb-1">Total Items</div>
+          <div class="h3 fw-bold mb-0">{{ summary.total_items|default:"0" }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body text-center">
+          <div class="text-muted small mb-1">Revenue</div>
+          <div class="h3 fw-bold mb-0">₹{{ summary.total_revenue|default:"0"|floatformat:0 }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body text-center">
+          <div class="text-muted small mb-1">Avg Items/Order</div>
+          <div class="h3 fw-bold mb-0">{{ summary.avg_items_per_order|default:"0"|floatformat:1 }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Break Slot Analysis -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white border-bottom-0 pt-3">
+      <h5 class="fw-bold mb-0">Orders by Break Slot</h5>
+    </div>
+    <div class="card-body">
+      {% if slot_stats %}
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead>
+              <tr>
+                <th>Break Slot</th>
+                <th class="text-end">Orders</th>
+                <th class="text-end">Items</th>
+                <th class="text-end">Revenue</th>
+                <th>Distribution</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for slot in slot_stats %}
+                <tr>
+                  <td>
+                    <div class="fw-semibold">{{ slot.order__break_slot__label }}</div>
+                    <div class="text-muted small">{{ slot.order__break_slot__start_time }} - {{ slot.order__break_slot__end_time }}</div>
+                  </td>
+                  <td class="text-end fw-semibold">{{ slot.total_orders }}</td>
+                  <td class="text-end">{{ slot.total_items|default:"0" }}</td>
+                  <td class="text-end">₹{{ slot.total_revenue|default:"0"|floatformat:0 }}</td>
+                  <td style="width: 30%;">
+                    <div class="progress" style="height: 8px;">
+                      <div class="progress-bar bg-dark" role="progressbar" 
+                           style="width: {% if summary.total_orders %}{% widthratio slot.total_orders summary.total_orders 100 %}{% else %}0{% endif %}%">
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-muted text-center py-4">No data available for the selected period.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Hourly Peak Times -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white border-bottom-0 pt-3">
+      <h5 class="fw-bold mb-0">Peak Hours</h5>
+    </div>
+    <div class="card-body">
+      {% if hourly_stats %}
+        <div class="row g-2">
+          {% for hour in hourly_stats %}
+            <div class="col-6 col-md-4 col-lg-2">
+              <div class="p-2 bg-light rounded text-center">
+                <div class="fw-semibold">{{ hour.hour }}:00 - {{ hour.hour }}:59</div>
+                <div class="h5 fw-bold mb-0">{{ hour.orders }} orders</div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="mt-3">
+          <div class="text-muted small mb-2">Order Volume by Hour</div>
+          <div class="d-flex align-items-end gap-1" style="height: 100px;">
+            {% for hour in hourly_stats %}
+              {% with max_orders=hourly_stats|first %}
+                <div class="flex-grow-1 bg-dark rounded-top" 
+                     style="height: {% if summary.total_orders %}{% widthratio hour.orders summary.total_orders 100 %}{% else %}0{% endif %}%; min-height: 5px;"
+                     title="{{ hour.hour }}:00 - {{ hour.orders }} orders">
+                </div>
+              {% endwith %}
+            {% endfor %}
+          </div>
+        </div>
+      {% else %}
+        <div class="text-muted text-center py-4">No hourly data available.</div>
+      {% endif %}
+    </div>
+  </div>
+
+ 
+  <!-- Daily Trend -->
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-white border-bottom-0 pt-3">
+      <h5 class="fw-bold mb-0">Daily Order Trend</h5>
+    </div>
+    <div class="card-body">
+      {% if daily_stats %}
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th class="text-end">Orders</th>
+                <th class="text-end">Items</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for day in daily_stats %}
+                <tr>
+                  <td>{{ day.date }}</td>
+                  <td class="text-end fw-semibold">{{ day.orders }}</td>
+                  <td class="text-end">{{ day.items|default:"0" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-muted text-center py-4">No daily trend data available.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

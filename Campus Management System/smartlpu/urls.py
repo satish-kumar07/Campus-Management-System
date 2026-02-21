@@ -19,12 +19,15 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
+from .views import RoleAwareLoginView
+
 admin.site.site_header = 'CMS Admin'
 admin.site.site_title = 'CMS'
 admin.site.index_title = 'CMS Administration'
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('accounts/login/', RoleAwareLoginView.as_view(), name='login'),
     path('accounts/', include('django.contrib.auth.urls')),
     path('food/', include('food_ordering.urls')),
     path('', include('attendance.urls')),

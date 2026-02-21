@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}Order Confirmation{% endblock %}
+
+{% block content %}
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h3 class="mb-1">Order Confirmed</h3>
+      <div class="text-muted">Order #{{ order.id }} - {{ order.stall.name }}</div>
+    </div>
+    <div>
+      <a class="btn btn-outline-dark" href="{% url 'food_my_orders' %}">My Orders</a>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-5">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="fw-semibold mb-2">Pickup Code</div>
+          <div class="display-6 fw-bold">{{ order.pickup_code|default:'-' }}</div>
+          <div class="text-muted mt-2">Show this code to the vendor at pickup.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="fw-semibold mb-2">Items</div>
+          {% for it in order.items.all %}
+            <div class="d-flex justify-content-between border-bottom py-2">
+              <div>{{ it.menu_item.name }} <span class="text-muted">x{{ it.qty }}</span></div>
+              <div class="fw-semibold">₹{{ it.line_total }}</div>
+            </div>
+          {% endfor %}
+          <div class="d-flex justify-content-between pt-3">
+            <div class="text-muted">Total</div>
+            <div class="fw-semibold">₹{{ order.total_amount }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

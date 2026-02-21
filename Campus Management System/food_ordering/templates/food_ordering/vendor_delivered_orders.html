@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+
+{% block title %}Delivered Orders{% endblock %}
+
+{% block content %}
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h3 class="mb-1">Vendor Dashboard</h3>
+      <div class="text-muted">Delivered orders history.</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-dark" href="{% url 'food_order_analytics' %}">Analytics</a>
+      <a class="btn btn-outline-dark" href="{% url 'food_vendor_dashboard' %}">Incoming</a>
+      <a class="btn btn-dark" href="{% url 'food_vendor_delivered_orders' %}">Delivered</a>
+    </div>
+  </div>
+
+  {% if not categories and not stalls %}
+    <div class="alert alert-warning shadow-sm" role="alert">
+      No categories assigned to this vendor. Ask admin to assign operators in MenuCategory.
+    </div>
+  {% endif %}
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      {% if orders %}
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Stall</th>
+                <th>Items</th>
+                <th>Status</th>
+                <th>Pickup Code</th>
+                <th>Delivered At</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for o in orders %}
+                <tr>
+                  <td>#{{ o.id }}</td>
+                  <td>{{ o.stall.name }}</td>
+                  <td>
+                    {% for it in o.items.all %}
+                      <div class="small">{{ it.menu_item.name }} x{{ it.qty }}</div>
+                    {% endfor %}
+                  </td>
+                  <td>{{ o.get_status_display }}</td>
+                  <td><span class="badge text-bg-secondary">{{ o.pickup_code|default:'-' }}</span></td>
+                  <td>{{ o.updated_at|date:"Y-m-d H:i" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-muted">No delivered orders yet.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block title %}Confirm Pickup Slot - {{ stall.name }}{% endblock %}
+
+{% block content %}
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h3 class="mb-1">Confirm Order</h3>
+      <div class="text-muted">{{ stall.name }}</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-dark" href="{% url 'food_select_pickup_slot' stall.id %}">Change Slot</a>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-5">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="fw-semibold mb-2">Reserved Slot</div>
+          <div class="mb-2">
+            {% if hold.break_slot %}
+              <div class="fw-semibold">{{ hold.break_slot.slot_date }} {{ hold.break_slot.start_time }}–{{ hold.break_slot.end_time }}</div>
+            {% else %}
+              <div class="fw-semibold text-warning">No slot selected</div>
+            {% endif %}
+            <div class="text-muted small">Hold expires in {{ remaining_seconds }} seconds</div>
+          </div>
+
+          <div class="fw-semibold mt-3 mb-2">Items</div>
+          <div class="list-group">
+            {% for it, qty in selected %}
+              <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  <div class="fw-semibold">{{ it.name }}</div>
+                  <div class="text-muted small">Qty: {{ qty }}</div>
+                </div>
+                <div class="fw-semibold">₹{{ it.price }}</div>
+              </div>
+            {% endfor %}
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mt-3">
+            <div class="text-muted">Total items</div>
+            <div class="fw-semibold">{{ requested_items }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="fw-semibold mb-2">Confirm</div>
+          <div class="text-muted mb-3">
+            Confirming will place your order and lock the slot.
+          </div>
+
+          <form method="post">
+            {% csrf_token %}
+            <div class="d-grid">
+              <button class="btn btn-outline-dark" type="submit">Confirm & Place Order</button>
+            </div>
+          </form>
+
+          <div class="text-muted small mt-3">
+            If the hold expires, you’ll need to select a slot again.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

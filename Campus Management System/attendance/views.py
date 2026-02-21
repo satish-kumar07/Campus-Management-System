@@ -35,6 +35,8 @@ from .forms import (
 )
 from .models import AttendanceRecord, AttendanceSession, Course, Enrollment, FaceSample, Notification, Student
 
+from .authz import require_teacher
+
 
 _live_state: dict[tuple[int, int], dict[str, object]] = {}
 
@@ -116,6 +118,7 @@ def _blink_seen(state: dict[str, object]) -> bool:
 
 
 @login_required
+@require_teacher
 def home(request: HttpRequest) -> HttpResponse:
     recent_sessions = AttendanceSession.objects.select_related("course").order_by("-created_at")[:3]
     stats = {
@@ -136,12 +139,14 @@ def home(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@require_teacher
 def attendance_home(request: HttpRequest) -> HttpResponse:
     sessions = AttendanceSession.objects.select_related("course").order_by("-created_at")[:20]
     return render(request, "attendance/attendance_home.html", {"sessions": sessions})
 
 
 @login_required
+@require_teacher
 def manage_dashboard(request: HttpRequest) -> HttpResponse:
     stats = {
         "students": Student.objects.count(),
@@ -156,12 +161,14 @@ def manage_dashboard(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@require_teacher
 def manage_students(request: HttpRequest) -> HttpResponse:
     students = Student.objects.order_by("roll_no")
     return render(request, "attendance/manage/students.html", {"students": students})
 
 
 @login_required
+@require_teacher
 def manage_student_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = StudentForm(request.POST)
@@ -175,6 +182,7 @@ def manage_student_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@require_teacher
 def manage_student_edit(request: HttpRequest, student_id: int) -> HttpResponse:
     student = get_object_or_404(Student, id=student_id)
     if request.method == "POST":
@@ -189,6 +197,7 @@ def manage_student_edit(request: HttpRequest, student_id: int) -> HttpResponse:
 
 
 @login_required
+@require_teacher
 def manage_student_delete(request: HttpRequest, student_id: int) -> HttpResponse:
     student = get_object_or_404(Student, id=student_id)
     if request.method == "POST":
@@ -199,12 +208,14 @@ def manage_student_delete(request: HttpRequest, student_id: int) -> HttpResponse
 
 
 @login_required
+@require_teacher
 def manage_courses(request: HttpRequest) -> HttpResponse:
     courses = Course.objects.order_by("code")
     return render(request, "attendance/manage/courses.html", {"courses": courses})
 
 
 @login_required
+@require_teacher
 def manage_course_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = CourseCreateForm(request.POST)
@@ -218,6 +229,7 @@ def manage_course_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@require_teacher
 def manage_course_delete(request: HttpRequest, course_id: int) -> HttpResponse:
     course = get_object_or_404(Course, id=course_id)
     if request.method == "POST":
@@ -228,12 +240,14 @@ def manage_course_delete(request: HttpRequest, course_id: int) -> HttpResponse:
 
 
 @login_required
+@require_teacher
 def manage_enrollments(request: HttpRequest) -> HttpResponse:
     enrollments = Enrollment.objects.select_related("student", "course").order_by("course__code", "student__roll_no")
     return render(request, "attendance/manage/enrollments.html", {"enrollments": enrollments})
 
 
 @login_required
+@require_teacher
 def manage_enrollment_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = EnrollmentForm(request.POST)
@@ -247,12 +261,14 @@ def manage_enrollment_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@require_teacher
 def manage_face_samples(request: HttpRequest) -> HttpResponse:
     samples = FaceSample.objects.select_related("student").order_by("-created_at")
     return render(request, "attendance/manage/face_samples.html", {"samples": samples})
 
 
 @login_required
+@require_teacher
 def manage_face_sample_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = FaceSampleMultiForm(request.POST, request.FILES)

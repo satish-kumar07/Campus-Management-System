@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+
+{% block title %}Vendor Dashboard{% endblock %}
+
+{% block content %}
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h3 class="mb-1">Vendor Dashboard</h3>
+      <div class="text-muted">Incoming orders for your assigned category(s).</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-dark" href="{% url 'food_order_analytics' %}">Analytics</a>
+      <a class="btn btn-dark" href="{% url 'food_vendor_dashboard' %}">Incoming</a>
+      <a class="btn btn-outline-dark" href="{% url 'food_vendor_delivered_orders' %}">Delivered</a>
+    </div>
+  </div>
+
+  {% if not categories and not stalls %}
+    <div class="alert alert-warning shadow-sm" role="alert">
+      No categories assigned to this vendor. Ask admin to assign operators in MenuCategory.
+    </div>
+  {% endif %}
+
+  {% if categories %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Assigned Categories</div>
+        <div class="d-flex flex-wrap gap-2">
+          {% for c in categories %}
+            <span class="badge text-bg-light border">{{ c.stall.name }} / {{ c.name }}</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      {% if orders %}
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Stall</th>
+                <th>Items</th>
+                <th>Status</th>
+                <th>Pickup Code</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for o in orders %}
+                <tr>
+                  <td>#{{ o.id }}</td>
+                  <td>{{ o.stall.name }}</td>
+                  <td>
+                    {% for it in o.items.all %}
+                      <div class="small">{{ it.menu_item.name }} x{{ it.qty }}</div>
+                    {% endfor %}
+                  </td>
+                  <td>{{ o.get_status_display }}</td>
+                  <td><span class="badge text-bg-secondary">{{ o.pickup_code|default:'-' }}</span></td>
+                  <td class="text-end text-nowrap">
+                    {% if o.status == 'pending' %}
+                      <form method="post" action="{% url 'food_vendor_update_order' o.id %}" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="accepted" />
+                        <button class="btn btn-outline-dark btn-sm" type="submit">Accept</button>
+                      </form>
+                    {% endif %}
+
+                    {% if o.status == 'pending' or o.status == 'accepted' %}
+                      <form method="post" action="{% url 'food_vendor_update_order' o.id %}" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="preparing" />
+                        <button class="btn btn-outline-dark btn-sm" type="submit">Preparing</button>
+                      </form>
+                    {% endif %}
+
+                    {% if o.status == 'accepted' or o.status == 'preparing' %}
+                      <form method="post" action="{% url 'food_vendor_update_order' o.id %}" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="ready" />
+                        <button class="btn btn-outline-dark btn-sm" type="submit">Ready</button>
+                      </form>
+                    {% endif %}
+
+                    {% if o.status == 'ready' %}
+                      <form method="post" action="{% url 'food_vendor_update_order' o.id %}" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="complete" />
+                        <input type="text" name="pickup_code" class="form-control form-control-sm d-inline" style="width:110px;" placeholder="Code" />
+                        <button class="btn btn-dark btn-sm" type="submit">Complete</button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-muted">No orders yet.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

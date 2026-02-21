@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+
+{% block title %}Select Pickup Slot - {{ stall.name }}{% endblock %}
+
+{% block content %}
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h3 class="mb-1">Select Pickup Slot</h3>
+      <div class="text-muted">{{ stall.name }}</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-dark" href="{% url 'food_preorder' stall.id %}">Back</a>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm position-sticky" style="top: 16px;">
+        <div class="card-body">
+          <div class="fw-semibold mb-2">Your Items</div>
+          <div class="list-group mb-3">
+            {% for it, qty in selected %}
+              <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  <div class="fw-semibold">{{ it.name }}</div>
+                  <div class="text-muted small">Qty: {{ qty }}</div>
+                </div>
+                <div class="fw-semibold">₹{{ it.price }}</div>
+              </div>
+            {% endfor %}
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="text-muted">Total items</div>
+            <div class="fw-semibold">{{ requested_items }}</div>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mt-1">
+            <div class="text-muted">Prep time (est.)</div>
+            <div class="fw-semibold">{{ prep_minutes }} min</div>
+          </div>
+
+          <div class="text-muted small mt-3">
+            Selecting a slot reserves capacity for 5 minutes.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="fw-semibold mb-2">Available Slots</div>
+
+          {% if suggestions %}
+            <div class="alert alert-warning">
+              <div class="fw-semibold">Suggested next slots</div>
+              <div class="mt-2 d-flex flex-wrap gap-2">
+                {% for c in suggestions %}
+                  <span class="badge text-bg-secondary">{{ c.slot.slot_date }} {{ c.slot.start_time }}–{{ c.slot.end_time }}</span>
+                {% endfor %}
+              </div>
+            </div>
+          {% endif %}
+
+          {% if slot_cards %}
+            <form method="post">
+              {% csrf_token %}
+              <div class="list-group">
+                {% for c in slot_cards %}
+                  <label class="list-group-item d-flex justify-content-between align-items-center gap-3">
+                    <div class="d-flex align-items-center gap-2">
+                      <input
+                        class="form-check-input mt-0"
+                        type="radio"
+                        name="break_slot_id"
+                        value="{{ c.slot.id }}"
+                        {% if forloop.first %}checked{% endif %}
+                        {% if not c.can_fit %}disabled{% endif %}
+                      />
+                      <div>
+                        <div class="fw-semibold">{{ c.slot.slot_date }} {{ c.slot.start_time }}–{{ c.slot.end_time }}</div>
+                        <div class="text-muted small">
+                          {% if not c.is_open %}
+                            Closed
+                          {% elif not c.feasible %}
+                            Not enough time for prep
+                          {% else %}
+                            Remaining: {{ c.remaining_items }} items
+                          {% endif %}
+                        </div>
+                      </div>
+                    </div>
+
+                    {% if c.can_fit %}
+                      <span class="badge text-bg-success">Available</span>
+                    {% else %}
+                      <span class="badge text-bg-danger">Full</span>
+                    {% endif %}
+                  </label>
+                {% endfor %}
+              </div>
+
+              <div class="d-grid mt-3">
+                <button class="btn btn-outline-dark" type="submit">Reserve Slot (5 min)</button>
+              </div>
+            </form>
+          {% else %}
+            <div class="text-muted">No slots configured.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
