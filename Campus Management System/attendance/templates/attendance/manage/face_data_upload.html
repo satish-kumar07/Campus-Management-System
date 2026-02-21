@@ -12,6 +12,7 @@
           <div class="manage-tabs mt-3">
             {% url 'manage_dashboard' as manage_home_url %}
             {% url 'manage_students' as manage_students_url %}
+            {% url 'manage_blocks' as manage_blocks_url %}
             {% url 'manage_courses' as manage_courses_url %}
             {% url 'manage_enrollments' as manage_enrollments_url %}
             {% url 'manage_face_samples' as manage_face_url %}
@@ -20,6 +21,7 @@
 
             <a class="tab-pill" href="{{ manage_home_url }}">Manage Home</a>
             <a class="tab-pill" href="{{ manage_students_url }}">Students</a>
+            <a class="tab-pill" href="{{ manage_blocks_url }}">Blocks</a>
             <a class="tab-pill" href="{{ manage_courses_url }}">Courses</a>
             <a class="tab-pill" href="{{ manage_enrollments_url }}">Enrollments</a>
             <a class="tab-pill is-active" href="{{ manage_face_url }}">Face Data</a>

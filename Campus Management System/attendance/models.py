@@ -4,6 +4,15 @@ from django.db.models import Max
 from django.utils import timezone
 
 
+class Subject(models.Model):
+    name = models.CharField(max_length=128)
+    code = models.CharField(max_length=32, unique=True)
+    description = models.TextField(blank=True)
+
+    def __str__(self) -> str:
+        return f"{self.code} - {self.name}"
+
+
 class Student(models.Model):
     UID_START = 12311000
 
@@ -36,6 +45,15 @@ class Student(models.Model):
 
 class AttendanceSession(models.Model):
     course = models.ForeignKey("courses.Course", on_delete=models.CASCADE)
+    subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True)
+    classroom = models.ForeignKey(
+        "classrooms.Classroom",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    block = models.CharField(max_length=32, blank=True)
+    capacity = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     session_start_at = models.DateTimeField(default=timezone.now)
     session_date = models.DateField()
@@ -45,6 +63,14 @@ class AttendanceSession(models.Model):
     def __str__(self) -> str:
         label = self.session_label or "Session"
         return f"{self.course.code} {label} {self.session_start_at}".strip()
+
+    def save(self, *args, **kwargs):
+        # Auto-populate block and capacity from classroom if not set
+        if self.classroom and not self.block:
+            self.block = getattr(self.classroom.block, "name", "")
+        if self.classroom and self.capacity is None:
+            self.capacity = self.classroom.capacity
+        super().save(*args, **kwargs)
 
 
 class AttendanceRecord(models.Model):

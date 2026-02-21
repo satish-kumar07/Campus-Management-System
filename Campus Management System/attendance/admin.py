@@ -117,8 +117,9 @@ class StudentAdmin(admin.ModelAdmin):
 
 @admin.register(AttendanceSession)
 class AttendanceSessionAdmin(admin.ModelAdmin):
-    list_display = ("course", "session_start_at", "session_label", "created_at")
-    list_filter = ("course", "session_start_at")
+    list_display = ("course", "subject", "classroom", "session_start_at", "session_label", "created_at")
+    list_filter = ("course", "subject", "classroom", "session_start_at")
+    search_fields = ("course__code", "course__name", "session_label", "block")
 
 
 @admin.register(AttendanceRecord)
@@ -138,3 +139,4 @@ class NotificationAdmin(admin.ModelAdmin):
 class FaceSampleAdmin(admin.ModelAdmin):
     list_display = ("student", "created_at")
     search_fields = ("student__roll_no", "student__full_name")
+

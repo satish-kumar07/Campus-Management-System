@@ -1,15 +1,15 @@
 {% extends 'base.html' %}
-{% block title %}CMS - Students{% endblock %}
+{% block title %}CMS - Classrooms{% endblock %}
 
 {% block content %}
   <div class="glass-strong p-4 p-md-5 mb-3">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
       <div>
-        <h1 class="h5 mb-1">Students</h1>
-        <div class="smart-muted">Create students and use them for enrollments + attendance.</div>
+        <h1 class="h5 mb-1">Classrooms</h1>
+        <div class="smart-muted">Manage blocks, rooms and capacities used for attendance sessions.</div>
       </div>
       <div class="d-flex gap-2 align-items-center">
-        <a class="btn btn-smart text-white" href="{% url 'manage_student_create' %}">Add Student</a>
+        <a class="btn btn-smart text-white" href="{% url 'manage_classroom_create' %}">Add Classroom</a>
         <a class="btn btn-outline-smart" href="{% url 'manage_dashboard' %}">Back</a>
       </div>
     </div>
@@ -30,29 +30,27 @@
       <table class="table table-hover align-middle mb-0 table-clean">
         <thead>
           <tr>
-            <th>Roll No</th>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Parent Email</th>
-            <th>Parent Phone</th>
+            <th>Room</th>
+            <th>Block</th>
+            <th>Capacity</th>
+            <th>Type</th>
             <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {% for s in students %}
+          {% for c in classrooms %}
             <tr>
-              <td class="fw-semibold">{{ s.roll_no }}</td>
-              <td>{{ s.full_name }}</td>
-              <td class="smart-muted">{{ s.email }}</td>
-              <td class="smart-muted">{{ s.parent_email }}</td>
-              <td class="smart-muted">{{ s.parent_phone }}</td>
+              <td class="fw-semibold">{{ c.room_number }}</td>
+              <td>{{ c.block.name }}</td>
+              <td class="smart-muted">{{ c.capacity }}</td>
+              <td class="smart-muted">{{ c.get_room_type_display }}</td>
               <td class="text-end">
-                <a class="btn btn-outline-smart btn-sm" href="{% url 'manage_student_edit' student_id=s.id %}">Edit</a>
-                <a class="btn btn-outline-danger btn-sm" href="{% url 'manage_student_delete' student_id=s.id %}">Delete</a>
+                <a class="btn btn-outline-smart btn-sm" href="{% url 'manage_classroom_edit' classroom_id=c.id %}">Edit</a>
+                <a class="btn btn-outline-danger btn-sm" href="{% url 'manage_classroom_delete' classroom_id=c.id %}">Delete</a>
               </td>
             </tr>
           {% empty %}
-            <tr><td colspan="6" class="smart-muted">No students yet.</td></tr>
+            <tr><td colspan="5" class="smart-muted">No classrooms yet.</td></tr>
           {% endfor %}
         </tbody>
       </table>

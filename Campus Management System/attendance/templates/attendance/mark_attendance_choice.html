@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}CMS - Mark Attendance - {{ session.course.code }}{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-9 col-xl-8">
+      <div class="form-shell glass-strong">
+        <div class="form-head px-4 px-md-5 pt-4 pt-md-5 pb-3">
+          <div class="h4 mb-1">Mark Attendance</div>
+          <div class="smart-muted">
+            {{ session.course.code }} - {{ session.course.name }}
+            {% if session.classroom %} | {{ session.classroom.room_number }}{% endif %}
+          </div>
+        </div>
+
+        <div class="px-4 px-md-5 pb-4 pb-md-5">
+          <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i>
+            <strong>Session Details:</strong><br>
+            • Course: {{ session.course.code }} - {{ session.course.name }}<br>
+            {% if session.classroom %}• Classroom: {{ session.classroom.room_number }} (Block {{ session.classroom.block.name }}, Capacity {{ session.classroom.capacity }})<br>{% endif %}
+            {% if session.block %}• Block: {{ session.block }}<br>{% endif %}
+            {% if session.capacity %}• Capacity: {{ session.capacity }}<br>{% endif %}
+            • Time: {{ session.session_start_at|date:"Y-m-d H:i" }}<br>
+            • Enrolled Students: {{ student_count }}
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12">
+              <h5>Choose attendance marking method:</h5>
+            </div>
+
+            <div class="col-md-6">
+              <div class="card h-100">
+                <div class="card-body text-center">
+                  <i class="fas fa-check-square fa-3x text-primary mb-3"></i>
+                  <h6 class="card-title">Manual Marking</h6>
+                  <p class="card-text small">Mark attendance manually by checking present/absent for each student.</p>
+                  {% if is_completed %}
+                    <a href="{% url 'session_history' session_id=session.id %}" class="btn btn-primary">View History</a>
+                  {% else %}
+                    <a href="{% url 'session_manual' session_id=session.id %}" class="btn btn-primary">Mark Manually</a>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="card h-100">
+                <div class="card-body text-center">
+                  <i class="fas fa-camera fa-3x text-success mb-3"></i>
+                  <h6 class="card-title">Face Recognition</h6>
+                  <p class="card-text small">Use face recognition to automatically mark attendance from photos.</p>
+                  {% if is_completed %}
+                    <a href="{% url 'session_history' session_id=session.id %}" class="btn btn-success">View History</a>
+                  {% else %}
+                    <a href="{% url 'session_face' session_id=session.id %}" class="btn btn-success">Use Face Capture</a>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+            <div class="col-12 mt-3">
+              <div class="d-flex gap-2">
+                <a href="{% url 'attendance_home' %}" class="btn btn-cancel">Back to Attendance</a>
+                <a href="{% url 'session_history' session_id=session.id %}" class="btn btn-secondary">View History</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -39,6 +39,7 @@
               <th>Course Name</th>
               <th>Date</th>
               <th>Time</th>
+              <th>Status</th>
               <th class="text-end">Actions</th>
             </tr>
           </thead>
@@ -49,9 +50,16 @@
                 <td class="smart-muted">{{ s.course.name }}</td>
                 <td>{{ s.session_start_at|date:"Y-m-d" }}</td>
                 <td class="smart-muted">{{ s.session_start_at|date:"H:i" }}</td>
+                <td>
+                  {% if s.is_completed %}
+                    <span class="badge text-bg-success">Completed</span>
+                  {% else %}
+                    <span class="badge text-bg-warning">Pending</span>
+                  {% endif %}
+                </td>
                 <td class="text-end">
                   <div class="d-inline-flex gap-2">
-                    <a class="btn btn-soft-blue btn-sm" href="{% url 'session_detail' session_id=s.id %}">View</a>
+                    <a class="btn btn-soft-blue btn-sm" href="{% url 'session_history' session_id=s.id %}">View</a>
                     <a class="btn btn-soft-danger btn-sm" href="{% url 'delete_session' session_id=s.id %}">Delete</a>
                   </div>
                 </td>

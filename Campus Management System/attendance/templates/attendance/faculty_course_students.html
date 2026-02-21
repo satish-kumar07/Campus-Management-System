@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}CMS - {{ course.code }} Students{% endblock %}
+
+{% block content %}
+  <div class="attendance-hero glass-strong p-4 p-md-5 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+      <div>
+        <div class="display-6 mb-1">{{ course.code }} Students</div>
+        <div class="smart-muted">Enrolled students list.</div>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-open" href="{% url 'create_session' %}?course={{ course.id }}">Create Session</a>
+        <a class="btn btn-cancel" href="{% url 'faculty_dashboard' %}">Back</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="attendance-card glass-strong p-3 p-md-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <div class="fw-semibold">Students</div>
+      <div class="smart-muted small">{{ students|length }} total</div>
+    </div>
+
+    {% if students %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 table-clean">
+          <thead>
+            <tr>
+              <th>Roll No</th>
+              <th>Name</th>
+              <th>Email</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in students %}
+              <tr>
+                <td class="fw-semibold">{{ s.roll_no }}</td>
+                <td>{{ s.full_name }}</td>
+                <td class="smart-muted">{{ s.email }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="smart-muted">No enrolled students found for this course.</div>
+    {% endif %}
+  </div>
+{% endblock %}

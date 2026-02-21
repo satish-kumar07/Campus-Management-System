@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}CMS - Take Attendance{% endblock %}
+
+{% block content %}
+  <div class="attendance-hero glass-strong p-4 p-md-5 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+      <div>
+        <div class="display-6 mb-1">Take Attendance</div>
+        <div class="smart-muted">Course: <span class="fw-semibold">{{ course.code }}</span> - {{ course.name }}</div>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-cancel" href="{% url 'faculty_dashboard' %}">Back</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="attendance-card glass-strong p-3 p-md-4">
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="row g-3 align-items-end mb-3">
+        <div class="col-12 col-lg-6">
+          <label class="form-label">Session label (optional)</label>
+          <input class="form-control" type="text" name="session_label" placeholder="e.g. Week 3 - Lecture" />
+        </div>
+        <div class="col-12 col-lg-6 text-lg-end">
+          <button class="btn btn-open" type="submit">Submit Attendance</button>
+        </div>
+      </div>
+
+      {% if students %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 table-clean">
+            <thead>
+              <tr>
+                <th style="width: 90px;">Present</th>
+                <th>Roll No</th>
+                <th>Student</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in students %}
+                <tr>
+                  <td>
+                    <input class="form-check-input" type="checkbox" name="present" value="{{ s.id }}" checked />
+                  </td>
+                  <td class="fw-semibold">{{ s.roll_no }}</td>
+                  <td class="smart-muted">{{ s.full_name }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="smart-muted small mt-3">Uncheck a student to mark as absent.</div>
+      {% else %}
+        <div class="smart-muted">No students enrolled for this course. Add enrollments from Admin.</div>
+      {% endif %}
+    </form>
+  </div>
+{% endblock %}

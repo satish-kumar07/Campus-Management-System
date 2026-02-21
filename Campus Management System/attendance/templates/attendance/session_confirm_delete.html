@@ -19,7 +19,7 @@
           {% csrf_token %}
           <div class="d-flex gap-2">
             <button class="btn btn-danger fw-semibold" type="submit">Yes, Delete</button>
-            <a class="btn btn-outline-smart" href="{% url 'session_detail' session_id=session.id %}">Cancel</a>
+            <a class="btn btn-outline-smart" href="{% url 'session_history' session_id=session.id %}">Cancel</a>
           </div>
         </form>
       </div>

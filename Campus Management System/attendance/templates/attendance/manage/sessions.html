@@ -15,12 +15,15 @@
     </div>
     <div class="top-tabs mt-3">
       <a href="{% url 'manage_students' %}">Students</a>
+      <a href="{% url 'manage_faculty' %}">Faculty</a>
       <a href="{% url 'manage_courses' %}">Courses</a>
+      <a href="{% url 'manage_blocks' %}">Blocks</a>
+      <a href="{% url 'manage_classrooms' %}">Classrooms</a>
       <a href="{% url 'manage_enrollments' %}">Enrollments</a>
-      <a href="{% url 'manage_face_samples' %}">Face Samples</a>
       <a href="{% url 'manage_sessions' %}">Sessions</a>
       <a href="{% url 'manage_records' %}">Records</a>
       <a href="{% url 'manage_notifications' %}">Notifications</a>
+      <a href="{% url 'manage_face_samples' %}">Face Data</a>
     </div>
   </div>
 
@@ -33,8 +36,9 @@
             <th>Date</th>
             <th>Time</th>
             <th>Label</th>
+            <th>Status</th>
             <th>Created</th>
-            <th></th>
+            <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -43,15 +47,29 @@
               <td class="fw-semibold">{{ s.course.code }} - {{ s.course.name }}</td>
               <td>{{ s.session_start_at|date:"Y-m-d" }}</td>
               <td class="smart-muted">{{ s.session_start_at|date:"H:i" }}</td>
-              <td class="smart-muted">{{ s.session_label }}</td>
-              <td class="smart-muted">{{ s.created_at }}</td>
+              <td class="smart-muted">{{ s.session_label|default:"-" }}</td>
+              <td>
+                {% if s.is_completed %}
+                  <span class="badge text-bg-success">Completed</span>
+                {% else %}
+                  <span class="badge text-bg-warning">Pending</span>
+                {% endif %}
+              </td>
+              <td class="smart-muted">{{ s.created_at|date:"M d, Y, h:i a" }}</td>
               <td class="text-end">
-                <a class="btn btn-outline-smart btn-sm" href="{% url 'session_detail' s.id %}">Open</a>
-                <a class="btn btn-outline-smart btn-sm" href="{% url 'manage_records' %}?session={{ s.id }}">Records</a>
+                <div class="d-inline-flex gap-2">
+                  <a class="btn btn-soft-blue btn-sm" href="{% url 'session_history' session_id=s.id %}">View</a>
+                  {% if not s.is_completed %}
+                    <a class="btn btn-open btn-sm" href="{% url 'mark_attendance_choice' session_id=s.id %}">Mark</a>
+                  {% else %}
+                    <span class="badge text-bg-success align-self-center">Completed</span>
+                  {% endif %}
+                  <a class="btn btn-mini btn-sm" href="{% url 'manage_records' %}?session={{ s.id }}">Records</a>
+                </div>
               </td>
             </tr>
           {% empty %}
-            <tr><td colspan="6" class="smart-muted">No sessions yet.</td></tr>
+            <tr><td colspan="7" class="smart-muted">No sessions yet.</td></tr>
           {% endfor %}
         </tbody>
       </table>

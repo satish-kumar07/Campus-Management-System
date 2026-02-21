@@ -7,7 +7,7 @@ class RoleAwareLoginView(LoginView):
         user = getattr(self.request, "user", None)
         if user is not None and getattr(user, "is_authenticated", False):
             if user.is_superuser or user.is_staff:
-                return super().get_success_url()
+                return reverse("faculty_dashboard")
             if user.groups.filter(name="VENDOR").exists():
                 return reverse("food_vendor_dashboard")
             if user.groups.filter(name="STUDENT").exists():

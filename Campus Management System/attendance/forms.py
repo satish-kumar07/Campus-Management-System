@@ -2,6 +2,10 @@ from django import forms
 from django.utils import timezone
 
 from courses.models import Course, Enrollment
+from faculty.models import Faculty
+
+from classrooms.models import Classroom
+from blocks.models import Block
 
 from .models import AttendanceSession, FaceSample, Student
 
@@ -37,7 +41,7 @@ class AttendanceSessionCreateForm(forms.ModelForm):
 
     class Meta:
         model = AttendanceSession
-        fields = ["course", "session_start_at", "session_label"]
+        fields = ["course", "classroom", "block", "capacity", "session_start_at", "session_label"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -45,13 +49,40 @@ class AttendanceSessionCreateForm(forms.ModelForm):
             now = timezone.localtime(timezone.now())
             now = (now.replace(second=0, microsecond=0) + timezone.timedelta(minutes=1))
             self.initial["session_start_at"] = now
-        if "session_label" in self.fields:
-            self.fields["session_label"].widget.attrs.update(
-                {"class": "form-control", "placeholder": "Enter session label"}
+
+        if "classroom" in self.fields:
+            self.fields["classroom"].queryset = Classroom.objects.select_related("block").order_by(
+                "block__name",
+                "room_number",
             )
-        if "course" in self.fields:
-            self.fields["course"].empty_label = "Select a course"
-            self.fields["course"].widget.attrs.update({"class": "form-select"})
+        
+        # Configure all form fields
+        field_configs = {
+            "session_label": {
+                "widget_attrs": {"class": "form-control", "placeholder": "Enter session label"}
+            },
+            "course": {
+                "empty_label": "Select a course",
+                "widget_attrs": {"class": "form-select"}
+            },
+            "classroom": {
+                "empty_label": "Select a classroom",
+                "widget_attrs": {"class": "form-select"}
+            },
+            "block": {
+                "widget_attrs": {"class": "form-control", "placeholder": "e.g. A, B, C", "readonly": True}
+            },
+            "capacity": {
+                "widget_attrs": {"class": "form-control", "placeholder": "e.g. 60", "readonly": True}
+            }
+        }
+        
+        for field_name, config in field_configs.items():
+            if field_name in self.fields:
+                if "widget_attrs" in config:
+                    self.fields[field_name].widget.attrs.update(config["widget_attrs"])
+                if "empty_label" in config:
+                    self.fields[field_name].empty_label = config["empty_label"]
 
     def clean_session_start_at(self):
         dt = self.cleaned_data.get("session_start_at")
@@ -98,6 +129,53 @@ class CourseCreateForm(forms.ModelForm):
             self.fields["faculty"].widget.attrs.update({"class": "form-select"})
         if "classroom" in self.fields:
             self.fields["classroom"].widget.attrs.update({"class": "form-select"})
+
+
+class FacultyForm(forms.ModelForm):
+    class Meta:
+        model = Faculty
+        fields = ["name", "department", "max_workload_hours", "email"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "name" in self.fields:
+            self.fields["name"].widget.attrs.update({"class": "form-control"})
+        if "department" in self.fields:
+            self.fields["department"].widget.attrs.update({"class": "form-control"})
+        if "max_workload_hours" in self.fields:
+            self.fields["max_workload_hours"].widget.attrs.update({"class": "form-control"})
+        if "email" in self.fields:
+            self.fields["email"].widget.attrs.update({"class": "form-control"})
+
+
+class ClassroomForm(forms.ModelForm):
+    class Meta:
+        model = Classroom
+        fields = ["block", "room_number", "capacity", "room_type"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "block" in self.fields:
+            self.fields["block"].widget.attrs.update({"class": "form-select"})
+        if "room_number" in self.fields:
+            self.fields["room_number"].widget.attrs.update({"class": "form-control"})
+        if "capacity" in self.fields:
+            self.fields["capacity"].widget.attrs.update({"class": "form-control"})
+        if "room_type" in self.fields:
+            self.fields["room_type"].widget.attrs.update({"class": "form-select"})
+
+
+class BlockForm(forms.ModelForm):
+    class Meta:
+        model = Block
+        fields = ["name", "total_floors"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "name" in self.fields:
+            self.fields["name"].widget.attrs.update({"class": "form-control"})
+        if "total_floors" in self.fields:
+            self.fields["total_floors"].widget.attrs.update({"class": "form-control"})
 
 
 class AttendancePhotoUploadForm(forms.Form):

@@ -3,6 +3,8 @@ from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.db import transaction
+from django.db.models import BooleanField, Case, Count, F, FloatField, Sum, Value, When, Q
+from django.db.models.functions import Coalesce
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -17,6 +19,10 @@ import base64
 import time
 from collections import deque
 
+from faculty.models import Faculty
+
+from classrooms.models import Classroom
+
 from .face_recognition import (
     build_training_set,
     detect_eyes_count,
@@ -29,13 +35,18 @@ from .forms import (
     AttendanceSessionCreateForm,
     CourseCreateForm,
     EnrollmentForm,
+    FacultyForm,
     FaceSampleMultiForm,
     FaceSampleForm,
+    ClassroomForm,
+    BlockForm,
     StudentForm,
 )
 from courses.models import Course, Enrollment
 
 from .models import AttendanceRecord, AttendanceSession, FaceSample, Notification, Student
+
+from blocks.models import Block
 
 from .authz import require_teacher
 
@@ -43,6 +54,35 @@ from .authz import require_teacher
 _live_state: dict[tuple[int, int], dict[str, object]] = {}
 
 logger = logging.getLogger(__name__)
+
+
+def _session_counts(*, session: AttendanceSession) -> dict[str, int]:
+    students_qs = (
+        Student.objects.filter(course_enrollments__course=session.course)
+        .order_by("roll_no")
+        .distinct()
+    )
+    total = students_qs.count()
+    present = AttendanceRecord.objects.filter(
+        session=session, status=AttendanceRecord.STATUS_PRESENT
+    ).count()
+    absent = AttendanceRecord.objects.filter(
+        session=session, status=AttendanceRecord.STATUS_ABSENT
+    ).count()
+    marked = present + absent
+    unmarked = max(total - marked, 0)
+    return {
+        "total": int(total),
+        "present": int(present),
+        "absent": int(absent),
+        "unmarked": int(unmarked),
+        "marked": int(marked),
+    }
+
+
+def _session_is_completed(*, session: AttendanceSession) -> bool:
+    c = _session_counts(session=session)
+    return bool(c["total"] > 0 and c["marked"] >= c["total"])
 
 
 def _send_absent_email(*, student: Student, session: AttendanceSession) -> tuple[bool, str]:
@@ -143,8 +183,267 @@ def home(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_teacher
 def attendance_home(request: HttpRequest) -> HttpResponse:
-    sessions = AttendanceSession.objects.select_related("course").order_by("-created_at")[:20]
+    sessions = (
+        AttendanceSession.objects.select_related("course")
+        .annotate(
+            enrolled_count=Count("course__enrollments", distinct=True),
+            records_count=Count("attendancerecord", distinct=True),
+        )
+        .annotate(
+            is_completed=Case(
+                When(
+                    enrolled_count__gt=0,
+                    records_count__gte=F("enrolled_count"),
+                    then=Value(True),
+                ),
+                default=Value(False),
+                output_field=BooleanField(),
+            )
+        )
+        .order_by("-created_at")[:20]
+    )
     return render(request, "attendance/attendance_home.html", {"sessions": sessions})
+
+
+@login_required
+@require_teacher
+def faculty_dashboard(request: HttpRequest) -> HttpResponse:
+    user = getattr(request, "user", None)
+    email = (getattr(user, "email", "") or "").strip().lower()
+    faculty = None
+    if email:
+        faculty = Faculty.objects.filter(email__iexact=email).first()
+
+    qs = Course.objects.order_by("code")
+    if faculty is not None:
+        qs = qs.filter(faculty=faculty)
+
+    courses = list(qs)
+
+    today = timezone.localdate()
+    week_start = today - timezone.timedelta(days=today.weekday())
+
+    recent_sessions_qs = (
+        AttendanceSession.objects.select_related("course")
+        .annotate(
+            present_count=Count(
+                "attendancerecord",
+                filter=Q(attendancerecord__status=AttendanceRecord.STATUS_PRESENT),
+            ),
+            absent_count=Count(
+                "attendancerecord",
+                filter=Q(attendancerecord__status=AttendanceRecord.STATUS_ABSENT),
+            ),
+            total_count=Count("attendancerecord"),
+            enrolled_count=Count("course__enrollments", distinct=True),
+        )
+        .annotate(
+            is_completed=Case(
+                When(
+                    enrolled_count__gt=0,
+                    total_count__gte=F("enrolled_count"),
+                    then=Value(True),
+                ),
+                default=Value(False),
+                output_field=BooleanField(),
+            )
+        )
+        .order_by("-created_at")
+    )
+    if faculty is not None:
+        recent_sessions_qs = recent_sessions_qs.filter(course__in=courses)
+    recent_sessions = list(recent_sessions_qs[:10])
+
+    sessions_total_qs = AttendanceSession.objects.all()
+    if faculty is not None:
+        sessions_total_qs = sessions_total_qs.filter(course__in=courses)
+    sessions_total = sessions_total_qs.count()
+    sessions_week = sessions_total_qs.filter(session_date__gte=week_start).count()
+
+    # Students handled = unique enrolled students across faculty courses
+    enrollments_qs = Enrollment.objects.all()
+    if faculty is not None:
+        enrollments_qs = enrollments_qs.filter(course__in=courses)
+    students_handled = enrollments_qs.values("student_id").distinct().count()
+
+    # Average attendance across recent sessions (avoid division by zero)
+    records_qs = AttendanceRecord.objects.all()
+    if faculty is not None:
+        records_qs = records_qs.filter(session__course__in=courses)
+    total_records = records_qs.count()
+    present_records = records_qs.filter(status=AttendanceRecord.STATUS_PRESENT).count()
+    avg_attendance_pct = round((present_records * 100.0 / total_records), 1) if total_records else 0.0
+
+    # Alerts
+    alerts: list[str] = []
+    no_enrollment = [c.code for c in courses if not Enrollment.objects.filter(course=c).exists()]
+    if no_enrollment:
+        alerts.append(f"No enrollments for: {', '.join(no_enrollment[:5])}{'...' if len(no_enrollment) > 5 else ''}")
+
+    # Face data missing: students enrolled but no face sample
+    missing_face_courses: list[str] = []
+    for c in courses[:50]:
+        enrolled_ids = list(Enrollment.objects.filter(course=c).values_list("student_id", flat=True).distinct())
+        if not enrolled_ids:
+            continue
+        face_ids = set(
+            FaceSample.objects.filter(student_id__in=enrolled_ids).values_list("student_id", flat=True).distinct()
+        )
+        missing = [sid for sid in enrolled_ids if sid not in face_ids]
+        if missing:
+            missing_face_courses.append(f"{c.code}({len(missing)})")
+    if missing_face_courses:
+        alerts.append(
+            "Face data missing for enrolled students in: "
+            + ", ".join(missing_face_courses[:5])
+            + ("..." if len(missing_face_courses) > 5 else "")
+        )
+
+    return render(
+        request,
+        "attendance/faculty_dashboard.html",
+        {
+            "faculty": faculty,
+            "courses": courses,
+            "recent_sessions": recent_sessions,
+            "today": today,
+            "stats": {
+                "sessions_week": sessions_week,
+                "sessions_total": sessions_total,
+                "students_handled": students_handled,
+                "avg_attendance_pct": avg_attendance_pct,
+            },
+            "alerts": alerts,
+        },
+    )
+
+
+@login_required
+@require_teacher
+def faculty_course_students(request: HttpRequest, course_id: int) -> HttpResponse:
+    course = get_object_or_404(Course, id=course_id)
+    students = (
+        Student.objects.filter(course_enrollments__course=course)
+        .order_by("roll_no")
+        .distinct()
+    )
+    return render(
+        request,
+        "attendance/faculty_course_students.html",
+        {"course": course, "students": students},
+    )
+
+
+@login_required
+@require_teacher
+def faculty_course_sessions(request: HttpRequest, course_id: int) -> HttpResponse:
+    course = get_object_or_404(Course, id=course_id)
+    sessions = (
+        AttendanceSession.objects.filter(course=course)
+        .annotate(
+            present_count=Count(
+                "attendancerecord",
+                filter=Q(attendancerecord__status=AttendanceRecord.STATUS_PRESENT),
+            ),
+            absent_count=Count(
+                "attendancerecord",
+                filter=Q(attendancerecord__status=AttendanceRecord.STATUS_ABSENT),
+            ),
+            total_count=Count("attendancerecord"),
+            enrolled_count=Count("course__enrollments", distinct=True),
+        )
+        .annotate(
+            is_completed=Case(
+                When(
+                    enrolled_count__gt=0,
+                    total_count__gte=F("enrolled_count"),
+                    then=Value(True),
+                ),
+                default=Value(False),
+                output_field=BooleanField(),
+            )
+        )
+        .order_by("-created_at")[:50]
+    )
+    return render(
+        request,
+        "attendance/faculty_course_sessions.html",
+        {"course": course, "sessions": sessions},
+    )
+
+
+@login_required
+@require_teacher
+@transaction.atomic
+def take_attendance(request: HttpRequest, course_id: int) -> HttpResponse:
+    course = get_object_or_404(Course, id=course_id)
+
+    students = (
+        Student.objects.filter(course_enrollments__course=course)
+        .order_by("roll_no")
+        .distinct()
+    )
+
+    if request.method == "POST":
+        now = timezone.localtime(timezone.now()).replace(second=0, microsecond=0)
+        present_ids = {int(x) for x in request.POST.getlist("present") if x.isdigit()}
+        session_label = (request.POST.get("session_label", "") or "").strip()
+
+        session = AttendanceSession.objects.create(
+            course=course,
+            session_start_at=now,
+            session_date=now.date(),
+            time_slot=now.strftime("%H:%M"),
+            session_label=session_label,
+        )
+
+        created = 0
+        for s in students:
+            status = (
+                AttendanceRecord.STATUS_PRESENT
+                if s.id in present_ids
+                else AttendanceRecord.STATUS_ABSENT
+            )
+            AttendanceRecord.objects.create(
+                session=session,
+                student=s,
+                status=status,
+                source="manual",
+            )
+            created += 1
+
+        messages.success(request, f"Attendance saved for {created} student(s).")
+        return redirect("attendance_confirmation", session_id=session.id)
+
+    return render(
+        request,
+        "attendance/take_attendance.html",
+        {
+            "course": course,
+            "students": students,
+        },
+    )
+
+
+@login_required
+@require_teacher
+def attendance_confirmation(request: HttpRequest, session_id: int) -> HttpResponse:
+    session = get_object_or_404(AttendanceSession.objects.select_related("course"), id=session_id)
+    total = AttendanceRecord.objects.filter(session=session).count()
+    present = AttendanceRecord.objects.filter(
+        session=session, status=AttendanceRecord.STATUS_PRESENT
+    ).count()
+    absent = total - present
+    return render(
+        request,
+        "attendance/attendance_confirmation.html",
+        {
+            "session": session,
+            "total": total,
+            "present": present,
+            "absent": absent,
+        },
+    )
 
 
 @login_required
@@ -152,14 +451,254 @@ def attendance_home(request: HttpRequest) -> HttpResponse:
 def manage_dashboard(request: HttpRequest) -> HttpResponse:
     stats = {
         "students": Student.objects.count(),
+        "faculty": Faculty.objects.count(),
         "courses": Course.objects.count(),
         "enrollments": Enrollment.objects.count(),
+        "blocks": Block.objects.count(),
+        "classrooms": Classroom.objects.count(),
         "face_samples": FaceSample.objects.count(),
         "notifications": Notification.objects.count(),
         "sessions": AttendanceSession.objects.count(),
         "records": AttendanceRecord.objects.count(),
     }
-    return render(request, "attendance/manage/dashboard.html", {"stats": stats})
+
+    # Capacity utilization (based on attendance records captured in sessions)
+    classroom_utilization = list(
+        AttendanceSession.objects.filter(classroom__isnull=False, classroom__capacity__gt=0)
+        .values(
+            "classroom_id",
+            "classroom__room_number",
+            "classroom__block__name",
+            "classroom__capacity",
+        )
+        .annotate(
+            sessions_count=Count("id"),
+            records_count=Count("attendancerecord"),
+        )
+        .annotate(
+            utilization_pct=(
+                100.0
+                * F("records_count")
+                / (F("sessions_count") * F("classroom__capacity"))
+            )
+        )
+        .order_by("-utilization_pct")[:10]
+    )
+
+    block_utilization = list(
+        AttendanceSession.objects.filter(classroom__isnull=False, classroom__capacity__gt=0)
+        .values("classroom__block__name")
+        .annotate(
+            sessions_count=Count("id"),
+            records_count=Count("attendancerecord"),
+            seats_offered=Sum("classroom__capacity"),
+        )
+        .annotate(
+            utilization_pct=(100.0 * F("records_count") / Coalesce(F("seats_offered"), 1))
+        )
+        .order_by("-utilization_pct")[:10]
+    )
+
+    # Faculty workload distribution (based on assigned courses weekly_hours)
+    faculty_rows = list(
+        Faculty.objects.annotate(
+            assigned_hours=Coalesce(Sum("course__weekly_hours"), 0),
+        ).order_by("name")
+    )
+    faculty_workloads: list[dict[str, object]] = []
+    counts = {"overloaded": 0, "balanced": 0, "underloaded": 0, "unassigned": 0}
+    for fobj in faculty_rows:
+        assigned = int(getattr(fobj, "assigned_hours", 0) or 0)
+        max_hours = int(getattr(fobj, "max_workload_hours", 0) or 0)
+        if assigned <= 0:
+            status = "Unassigned"
+            counts["unassigned"] += 1
+        elif max_hours > 0 and assigned > max_hours:
+            status = "Overloaded"
+            counts["overloaded"] += 1
+        elif max_hours > 0 and assigned == max_hours:
+            status = "Balanced"
+            counts["balanced"] += 1
+        else:
+            status = "Underloaded"
+            counts["underloaded"] += 1
+
+        utilization_pct = round((assigned * 100.0 / max_hours), 1) if max_hours > 0 else None
+        faculty_workloads.append(
+            {
+                "id": fobj.id,
+                "name": fobj.name,
+                "department": fobj.department,
+                "email": fobj.email,
+                "assigned_hours": assigned,
+                "max_hours": max_hours,
+                "utilization_pct": utilization_pct,
+                "status": status,
+            }
+        )
+
+    return render(
+        request,
+        "attendance/manage/dashboard.html",
+        {
+            "stats": stats,
+            "classroom_utilization": classroom_utilization,
+            "block_utilization": block_utilization,
+            "faculty_workloads": faculty_workloads,
+            "faculty_workload_counts": counts,
+        },
+    )
+
+
+@login_required
+@require_teacher
+def manage_blocks(request: HttpRequest) -> HttpResponse:
+    blocks = Block.objects.order_by("name")
+    return render(request, "attendance/manage/blocks.html", {"blocks": blocks})
+
+
+@login_required
+@require_teacher
+def manage_block_create(request: HttpRequest) -> HttpResponse:
+    if request.method == "POST":
+        form = BlockForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Block created.")
+            return redirect("manage_blocks")
+    else:
+        form = BlockForm()
+    return render(request, "attendance/manage/form.html", {"form": form, "title": "Add Block"})
+
+
+@login_required
+@require_teacher
+def manage_block_edit(request: HttpRequest, block_id: int) -> HttpResponse:
+    b = get_object_or_404(Block, id=block_id)
+    if request.method == "POST":
+        form = BlockForm(request.POST, instance=b)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Block updated.")
+            return redirect("manage_blocks")
+    else:
+        form = BlockForm(instance=b)
+    return render(request, "attendance/manage/form.html", {"form": form, "title": "Edit Block"})
+
+
+@login_required
+@require_teacher
+def manage_block_delete(request: HttpRequest, block_id: int) -> HttpResponse:
+    b = get_object_or_404(Block, id=block_id)
+    if Classroom.objects.filter(block=b).exists():
+        messages.error(request, "Cannot delete block while classrooms exist in it. Delete/move classrooms first.")
+        return redirect("manage_blocks")
+    if request.method == "POST":
+        b.delete()
+        messages.success(request, "Block deleted.")
+        return redirect("manage_blocks")
+    return render(
+        request,
+        "attendance/manage/confirm_delete.html",
+        {"object": b, "type": "Block", "cancel_url": "manage_blocks"},
+    )
+
+
+@login_required
+@require_teacher
+def manage_faculty(request: HttpRequest) -> HttpResponse:
+    faculty = Faculty.objects.order_by("name")
+    return render(request, "attendance/manage/faculty.html", {"faculty": faculty})
+
+
+@login_required
+@require_teacher
+def manage_faculty_create(request: HttpRequest) -> HttpResponse:
+    if request.method == "POST":
+        form = FacultyForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Faculty created.")
+            return redirect("manage_faculty")
+    else:
+        form = FacultyForm()
+    return render(request, "attendance/manage/form.html", {"form": form, "title": "Add Faculty"})
+
+
+@login_required
+@require_teacher
+def manage_faculty_edit(request: HttpRequest, faculty_id: int) -> HttpResponse:
+    f = get_object_or_404(Faculty, id=faculty_id)
+    if request.method == "POST":
+        form = FacultyForm(request.POST, instance=f)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Faculty updated.")
+            return redirect("manage_faculty")
+    else:
+        form = FacultyForm(instance=f)
+    return render(request, "attendance/manage/form.html", {"form": form, "title": "Edit Faculty"})
+
+
+@login_required
+@require_teacher
+def manage_faculty_delete(request: HttpRequest, faculty_id: int) -> HttpResponse:
+    f = get_object_or_404(Faculty, id=faculty_id)
+    if Course.objects.filter(faculty=f).exists():
+        messages.error(request, "Cannot delete faculty while courses are assigned. Reassign or remove faculty from courses first.")
+        return redirect("manage_faculty")
+    if request.method == "POST":
+        f.delete()
+        messages.success(request, "Faculty deleted.")
+        return redirect("manage_faculty")
+    return render(request, "attendance/manage/confirm_delete.html", {"object": f, "type": "Faculty", "cancel_url": "manage_faculty"})
+
+
+@login_required
+@require_teacher
+def manage_classrooms(request: HttpRequest) -> HttpResponse:
+    classrooms = Classroom.objects.select_related("block").order_by("block__name", "room_number")
+    return render(request, "attendance/manage/classrooms.html", {"classrooms": classrooms})
+
+
+@login_required
+@require_teacher
+def manage_classroom_create(request: HttpRequest) -> HttpResponse:
+    if request.method == "POST":
+        form = ClassroomForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Classroom created.")
+            return redirect("manage_classrooms")
+    else:
+        form = ClassroomForm()
+    return render(request, "attendance/manage/form.html", {"form": form, "title": "Add Classroom"})
+
+
+@login_required
+@require_teacher
+def manage_classroom_edit(request: HttpRequest, classroom_id: int) -> HttpResponse:
+    c = get_object_or_404(Classroom, id=classroom_id)
+    if request.method == "POST":
+        form = ClassroomForm(request.POST, instance=c)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Classroom updated.")
+            return redirect("manage_classrooms")
+    else:
+        form = ClassroomForm(instance=c)
+    return render(request, "attendance/manage/form.html", {"form": form, "title": "Edit Classroom"})
+
+
+@login_required
+@require_teacher
+def manage_classroom_delete(request: HttpRequest, classroom_id: int) -> HttpResponse:
+    c = get_object_or_404(Classroom, id=classroom_id)
+    if request.method == "POST":
+        c.delete()
+        messages.success(request, "Classroom deleted.")
+        return redirect("manage_classrooms")
+    return render(request, "attendance/manage/confirm_delete.html", {"object": c, "type": "Classroom", "cancel_url": "manage_classrooms"})
 
 
 @login_required
@@ -232,6 +771,21 @@ def manage_course_create(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_teacher
+def manage_course_edit(request: HttpRequest, course_id: int) -> HttpResponse:
+    course = get_object_or_404(Course, id=course_id)
+    if request.method == "POST":
+        form = CourseCreateForm(request.POST, instance=course)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Course updated.")
+            return redirect("manage_courses")
+    else:
+        form = CourseCreateForm(instance=course)
+    return render(request, "attendance/manage/form.html", {"form": form, "title": "Edit Course"})
+
+
+@login_required
+@require_teacher
 def manage_course_delete(request: HttpRequest, course_id: int) -> HttpResponse:
     course = get_object_or_404(Course, id=course_id)
     if request.method == "POST":
@@ -300,6 +854,7 @@ def manage_face_sample_delete(request: HttpRequest, face_sample_id: int) -> Http
 
 
 @login_required
+@require_teacher
 @transaction.atomic
 def manage_face_samples_delete_all(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
@@ -325,18 +880,39 @@ def manage_face_samples_delete_all(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@require_teacher
 def manage_notifications(request: HttpRequest) -> HttpResponse:
     notifications = Notification.objects.select_related("recipient_student").order_by("-created_at")[:200]
     return render(request, "attendance/manage/notifications.html", {"notifications": notifications})
 
 
 @login_required
+@require_teacher
 def manage_sessions(request: HttpRequest) -> HttpResponse:
-    sessions = AttendanceSession.objects.select_related("course").order_by("-created_at")[:200]
+    sessions = (
+        AttendanceSession.objects.select_related("course")
+        .annotate(
+            enrolled_count=Count("course__enrollments", distinct=True),
+            records_count=Count("attendancerecord", distinct=True),
+        )
+        .annotate(
+            is_completed=Case(
+                When(
+                    enrolled_count__gt=0,
+                    records_count__gte=F("enrolled_count"),
+                    then=Value(True),
+                ),
+                default=Value(False),
+                output_field=BooleanField(),
+            )
+        )
+        .order_by("-created_at")[:200]
+    )
     return render(request, "attendance/manage/sessions.html", {"sessions": sessions})
 
 
 @login_required
+@require_teacher
 def manage_records(request: HttpRequest) -> HttpResponse:
     session_id = request.GET.get("session")
     qs = AttendanceRecord.objects.select_related("session", "session__course", "student").order_by(
@@ -360,48 +936,56 @@ def manage_records(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def create_session(request: HttpRequest) -> HttpResponse:
+    user = getattr(request, "user", None)
+    email = (getattr(user, "email", "") or "").strip().lower()
+    faculty = Faculty.objects.filter(email__iexact=email).first() if email else None
+    allowed_courses = Course.objects.order_by("code")
+    if faculty is not None:
+        allowed_courses = allowed_courses.filter(faculty=faculty)
+
     if request.method == "POST":
         form = AttendanceSessionCreateForm(request.POST)
+        if "course" in form.fields:
+            form.fields["course"].queryset = allowed_courses
         if form.is_valid():
             session = form.save()
-            messages.success(request, "Session created.")
-            return redirect("session_detail", session_id=session.id)
+            messages.success(request, "Session created. Now choose how to mark attendance.")
+            return redirect("mark_attendance_choice", session_id=session.id)
     else:
         now = timezone.localtime(timezone.now()).replace(second=0, microsecond=0) + timezone.timedelta(minutes=1)
-        form = AttendanceSessionCreateForm(initial={"session_start_at": now})
+        initial: dict[str, object] = {"session_start_at": now}
+        course_id = request.GET.get("course")
+        if course_id and course_id.isdigit():
+            initial["course"] = int(course_id)
+        form = AttendanceSessionCreateForm(initial=initial)
+        if "course" in form.fields:
+            form.fields["course"].queryset = allowed_courses
 
     return render(request, "attendance/create_session.html", {"form": form})
 
 
 @login_required
-def edit_session(request: HttpRequest, session_id: int) -> HttpResponse:
-    session = get_object_or_404(AttendanceSession.objects.select_related("course"), id=session_id)
-    if request.method == "POST":
-        form = AttendanceSessionCreateForm(request.POST, instance=session)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Session updated.")
-            return redirect("session_detail", session_id=session.id)
-    else:
-        form = AttendanceSessionCreateForm(instance=session)
-
-    return render(request, "attendance/edit_session.html", {"form": form, "session": session})
-
-
-@login_required
-def delete_session(request: HttpRequest, session_id: int) -> HttpResponse:
-    session = get_object_or_404(AttendanceSession.objects.select_related("course"), id=session_id)
-    if request.method == "POST":
-        session.delete()
-        messages.success(request, "Session deleted.")
-        return redirect("attendance_home")
-
-    return render(request, "attendance/session_confirm_delete.html", {"session": session})
+def mark_attendance_choice(request: HttpRequest, session_id: int) -> HttpResponse:
+    session = get_object_or_404(AttendanceSession.objects.select_related("course", "subject", "classroom"), id=session_id)
+    students = (
+        Student.objects.filter(course_enrollments__course=session.course)
+        .order_by("roll_no")
+        .distinct()
+    )
+    
+    return render(request, "attendance/mark_attendance_choice.html", {
+        "session": session,
+        "student_count": students.count(),
+        "is_completed": _session_is_completed(session=session),
+    })
 
 
 @login_required
-def session_detail(request: HttpRequest, session_id: int) -> HttpResponse:
-    session = get_object_or_404(AttendanceSession.objects.select_related("course"), id=session_id)
+def session_manual(request: HttpRequest, session_id: int) -> HttpResponse:
+    session = get_object_or_404(
+        AttendanceSession.objects.select_related("course"),
+        id=session_id,
+    )
     students = (
         Student.objects.filter(course_enrollments__course=session.course)
         .order_by("roll_no")
@@ -425,9 +1009,137 @@ def session_detail(request: HttpRequest, session_id: int) -> HttpResponse:
 
     return render(
         request,
-        "attendance/session_detail.html",
-        {"session": session, "student_rows": student_rows, "photo_form": AttendancePhotoUploadForm()},
+        "attendance/session_manual.html",
+        {
+            "session": session,
+            "student_rows": student_rows,
+            "counts": _session_counts(session=session),
+        },
     )
+
+
+@login_required
+def session_face(request: HttpRequest, session_id: int) -> HttpResponse:
+    session = get_object_or_404(
+        AttendanceSession.objects.select_related("course"),
+        id=session_id,
+    )
+    return render(
+        request,
+        "attendance/session_face.html",
+        {
+            "session": session,
+            "photo_form": AttendancePhotoUploadForm(),
+            "counts": _session_counts(session=session),
+        },
+    )
+
+
+@login_required
+def session_mark_summary(request: HttpRequest, session_id: int) -> HttpResponse:
+    session = get_object_or_404(
+        AttendanceSession.objects.select_related("course", "subject", "classroom", "classroom__block"),
+        id=session_id,
+    )
+    counts = _session_counts(session=session)
+    return render(
+        request,
+        "attendance/session_mark_summary.html",
+        {
+            "session": session,
+            "counts": counts,
+            "is_completed": bool(counts["total"] > 0 and counts["marked"] >= counts["total"]),
+        },
+    )
+
+
+@login_required
+def edit_session(request: HttpRequest, session_id: int) -> HttpResponse:
+    session = get_object_or_404(AttendanceSession.objects.select_related("course"), id=session_id)
+    if request.method == "POST":
+        form = AttendanceSessionCreateForm(request.POST, instance=session)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Session updated.")
+            return redirect("session_face", session_id=session.id)
+    else:
+        form = AttendanceSessionCreateForm(instance=session)
+
+    return render(request, "attendance/edit_session.html", {"form": form, "session": session})
+
+
+@login_required
+def delete_session(request: HttpRequest, session_id: int) -> HttpResponse:
+    session = get_object_or_404(AttendanceSession.objects.select_related("course"), id=session_id)
+    if request.method == "POST":
+        session.delete()
+        messages.success(request, "Session deleted.")
+        return redirect("attendance_home")
+
+    return render(request, "attendance/session_confirm_delete.html", {"session": session})
+
+
+@login_required
+def session_history(request: HttpRequest, session_id: int) -> HttpResponse:
+    session = get_object_or_404(
+        AttendanceSession.objects.select_related(
+            "course",
+            "course__faculty",
+            "subject",
+            "classroom",
+            "classroom__block",
+        ),
+        id=session_id,
+    )
+    students = list(
+        Student.objects.filter(course_enrollments__course=session.course)
+        .order_by("roll_no")
+        .distinct()
+    )
+
+    records = {
+        r.student_id: r
+        for r in AttendanceRecord.objects.filter(session=session).select_related("student")
+    }
+
+    present_rows: list[dict[str, object]] = []
+    absent_rows: list[dict[str, object]] = []
+    unmarked_rows: list[dict[str, object]] = []
+
+    for s in students:
+        rec = records.get(s.id)
+        if rec is None:
+            unmarked_rows.append({"student": s, "status": "", "source": ""})
+        elif rec.status == AttendanceRecord.STATUS_PRESENT:
+            present_rows.append({"student": s, "status": rec.status, "source": rec.source})
+        else:
+            absent_rows.append({"student": s, "status": rec.status, "source": rec.source})
+
+    return render(
+        request,
+        "attendance/session_history.html",
+        {
+            "session": session,
+            "present_rows": present_rows,
+            "absent_rows": absent_rows,
+            "unmarked_rows": unmarked_rows,
+            "is_completed": bool(len(students) > 0 and (len(present_rows) + len(absent_rows)) >= len(students)),
+            "counts": {
+                "total": len(students),
+                "present": len(present_rows),
+                "absent": len(absent_rows),
+                "unmarked": len(unmarked_rows),
+            },
+        },
+    )
+
+
+@login_required
+def session_detail(request: HttpRequest, session_id: int) -> HttpResponse:
+    session = get_object_or_404(AttendanceSession.objects.select_related("course"), id=session_id)
+    if _session_is_completed(session=session):
+        return redirect("session_history", session_id=session.id)
+    return redirect("mark_attendance_choice", session_id=session.id)
 
 
 @login_required
@@ -441,12 +1153,12 @@ def mark_attendance_by_photo(request: HttpRequest, session_id: int) -> HttpRespo
     )
 
     if request.method != "POST":
-        return redirect("session_detail", session_id=session.id)
+        return redirect("session_face", session_id=session.id)
 
     form = AttendancePhotoUploadForm(request.POST, request.FILES)
     if not form.is_valid():
         messages.error(request, "Please upload a valid image.")
-        return redirect("session_detail", session_id=session.id)
+        return redirect("session_face", session_id=session.id)
 
     # Build training set from stored FaceSample images
     images_by_label: dict[int, list[np.ndarray]] = {}
@@ -492,7 +1204,7 @@ def mark_attendance_by_photo(request: HttpRequest, session_id: int) -> HttpRespo
             "Face training data is missing/invalid. Upload Face Data in Manage Data (need at least 5 clear photos with a detectable face per enrolled student). "
             f"Samples found (total/usable) in course order: [{counts_str}]",
         )
-        return redirect("session_detail", session_id=session.id)
+        return redirect("session_face", session_id=session.id)
 
     # Decode uploaded image
     upload = form.cleaned_data["photo"]
@@ -502,9 +1214,16 @@ def mark_attendance_by_photo(request: HttpRequest, session_id: int) -> HttpRespo
 
     recognized = recognize_faces_in_image(recognizer, bgr)
 
+    if not recognized:
+        messages.error(
+            request,
+            "No face detected in the uploaded image. Please try again with a clearer photo (front face, good lighting).",
+        )
+        return redirect("session_face", session_id=session.id)
+
     # LBPH: lower confidence is better.
-    # Strict mode (A1): use a tighter threshold to reduce false positives.
-    threshold = 70.0
+    # Use a tighter threshold to reduce false positives.
+    threshold = 60.0
     allowed_ids = {s.id for s in students}
 
     # Choose best (lowest) confidence per predicted label
@@ -519,9 +1238,10 @@ def mark_attendance_by_photo(request: HttpRequest, session_id: int) -> HttpRespo
 
     sorted_matches = sorted(best_by_id.items(), key=lambda x: x[1])
 
-    # Ambiguity guard: if the best match isn't clearly better than the second best,
-    # treat the image as unknown to prevent look-alike false positives.
-    if len(sorted_matches) >= 2:
+    # Ambiguity guard:
+    # Only apply when the upload appears to contain a single face.
+    # For group photos, multiple different students can (correctly) have close confidence.
+    if len(recognized) <= 1 and len(sorted_matches) >= 2:
         best_conf = float(sorted_matches[0][1])
         second_conf = float(sorted_matches[1][1])
         if (second_conf - best_conf) < 12.0:
@@ -529,9 +1249,16 @@ def mark_attendance_by_photo(request: HttpRequest, session_id: int) -> HttpRespo
                 request,
                 "Face match is ambiguous (two students are too close). Please try again with better lighting/angle or improve Face Data.",
             )
-            return redirect("session_detail", session_id=session.id)
+            return redirect("session_face", session_id=session.id)
 
     present_ids = {sid for (sid, conf) in sorted_matches if conf <= threshold}
+
+    if not present_ids:
+        messages.error(
+            request,
+            "No confident face match found. Please add more Face Data (5-10 clear photos per student) and retry with better lighting/angle.",
+        )
+        return redirect("session_face", session_id=session.id)
 
     for s in students:
         status = (
@@ -565,7 +1292,7 @@ def mark_attendance_by_photo(request: HttpRequest, session_id: int) -> HttpRespo
         preview = "; ".join(email_failures[:3])
         extra = "" if len(email_failures) <= 3 else f" (+{len(email_failures) - 3} more)"
         messages.warning(request, f"Absent emails not sent for {len(email_failures)} student(s): {preview}{extra}")
-    return redirect("session_detail", session_id=session.id)
+    return redirect("session_mark_summary", session_id=session.id)
 
 
 @login_required
@@ -579,7 +1306,7 @@ def mark_attendance(request: HttpRequest, session_id: int) -> HttpResponse:
     )
 
     if request.method != "POST":
-        return redirect("session_detail", session_id=session.id)
+        return redirect("session_manual", session_id=session.id)
 
     action = request.POST.get("action", "")
 
@@ -591,7 +1318,7 @@ def mark_attendance(request: HttpRequest, session_id: int) -> HttpResponse:
                 defaults={"status": AttendanceRecord.STATUS_PRESENT, "source": "manual"},
             )
         messages.success(request, "Marked all students present.")
-        return redirect("session_detail", session_id=session.id)
+        return redirect("session_mark_summary", session_id=session.id)
 
     present_ids = {int(x) for x in request.POST.getlist("present") if x.isdigit()}
 
@@ -626,7 +1353,7 @@ def mark_attendance(request: HttpRequest, session_id: int) -> HttpResponse:
         preview = "; ".join(email_failures[:3])
         extra = "" if len(email_failures) <= 3 else f" (+{len(email_failures) - 3} more)"
         messages.warning(request, f"Absent emails not sent for {len(email_failures)} student(s): {preview}{extra}")
-    return redirect("session_detail", session_id=session.id)
+    return redirect("session_mark_summary", session_id=session.id)
 
 
 @login_required

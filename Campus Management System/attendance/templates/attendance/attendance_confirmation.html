@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}CMS - Attendance Saved{% endblock %}
+
+{% block content %}
+  <div class="attendance-hero glass-strong p-4 p-md-5 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+      <div>
+        <div class="display-6 mb-1">Attendance Saved</div>
+        <div class="smart-muted">
+          {{ session.course.code }} - {{ session.course.name }}
+        </div>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-open" href="{% url 'session_history' session_id=session.id %}">View History</a>
+        <a class="btn btn-cancel" href="{% url 'faculty_dashboard' %}">Back to Courses</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="attendance-card glass-strong p-3 p-md-4">
+    <div class="row g-3">
+      <div class="col-12 col-md-4">
+        <div class="total-card">
+          <div class="smart-muted small">Total Students</div>
+          <div class="h4 mb-0">{{ total }}</div>
+        </div>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="total-card">
+          <div class="smart-muted small">Present</div>
+          <div class="h4 mb-0">{{ present }}</div>
+        </div>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="total-card">
+          <div class="smart-muted small">Absent</div>
+          <div class="h4 mb-0">{{ absent }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="smart-muted mt-3">
+      Session time: {{ session.session_start_at|date:"Y-m-d H:i" }}
+      {% if session.session_label %}
+        <span class="ms-2">| Label: {{ session.session_label }}</span>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

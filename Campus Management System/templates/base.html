@@ -73,6 +73,7 @@
           <div class="nav-soft d-grid gap-1">
             {% url 'home' as home_url %}
             {% url 'attendance_home' as attendance_url %}
+            {% url 'faculty_dashboard' as faculty_url %}
             {% url 'food_home' as food_url %}
             {% url 'manage_dashboard' as manage_url %}
             <a href="{{ home_url }}" class="nav-link-soft {% if request.path == home_url %}is-active{% endif %}">
@@ -87,6 +88,17 @@
               </div>
             </a>
             {% if not is_student %}
+              <a href="{{ faculty_url }}" class="nav-link-soft {% if request.path|slice:':9' == '/faculty/' %}is-active{% endif %}">
+                <div class="nav-ico">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                </div>
+                <div class="nav-text">
+                  <div class="nav-title">Faculty Dashboard</div>
+                </div>
+              </a>
               <a href="{{ attendance_url }}" class="nav-link-soft {% if request.path == attendance_url %}is-active{% endif %}">
                 <div class="nav-ico">
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -116,7 +128,7 @@
               </div>
             </a>
             {% if not is_student %}
-              <a href="{{ manage_url }}" class="nav-link-soft {% if request.path|slice:':7' == manage_url %}is-active{% endif %}">
+              <a href="{{ manage_url }}" class="nav-link-soft {% if request.path|slice:':8' == manage_url %}is-active{% endif %}">
                 <div class="nav-ico">
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <ellipse cx="12" cy="5" rx="8" ry="3"></ellipse>

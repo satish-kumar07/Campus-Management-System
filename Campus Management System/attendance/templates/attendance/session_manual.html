@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}CMS - Manual Attendance{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+      <h1 class="h4 mb-1">Manual Attendance</h1>
+      <div class="smart-muted small">
+        {{ session.course.code }} · {{ session.course.name }}
+        · {{ session.session_start_at|date:"Y-m-d" }} · {{ session.session_start_at|date:"H:i" }}
+        {% if session.session_label %}· {{ session.session_label }}{% endif %}
+      </div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-smart btn-sm" href="{% url 'mark_attendance_choice' session_id=session.id %}">Back</a>
+      <a class="btn btn-soft-blue btn-sm" href="{% url 'session_history' session_id=session.id %}">View History</a>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="glass-strong p-3 p-md-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <span class="fw-semibold">Manual Marking</span>
+            <span class="smart-muted small ms-2">Total {{ counts.total }} · Present {{ counts.present }} · Absent {{ counts.absent }} · Unmarked {{ counts.unmarked }}</span>
+          </div>
+          <button class="btn btn-outline-smart btn-sm" type="button" id="markAllPresentBtn">One-click: Mark All Present</button>
+        </div>
+
+        <form method="post" action="{% url 'mark_attendance' session_id=session.id %}">
+          {% csrf_token %}
+          <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0 table-clean">
+              <thead>
+                <tr>
+                  <th>Present</th>
+                  <th>Roll No</th>
+                  <th>Name</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in student_rows %}
+                  <tr>
+                    <td>
+                      <input class="form-check-input" type="checkbox" name="present" value="{{ row.student.id }}" {% if row.status == 'present' %}checked{% endif %} />
+                    </td>
+                    <td class="fw-semibold">{{ row.student.roll_no }}</td>
+                    <td>{{ row.student.full_name }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 justify-content-end mt-3">
+            <button class="btn btn-smart text-white fw-semibold" type="submit">Save</button>
+          </div>
+        </form>
+
+        <div class="small smart-muted mt-3">
+          Absentees are auto-detected and notifications are simulated (see Admin → Notifications).
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const btn = document.getElementById('markAllPresentBtn');
+      if (!btn) return;
+
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('input[type="checkbox"][name="present"]').forEach((el) => {
+          el.checked = true;
+        });
+      });
+    })();
+  </script>
+{% endblock %}

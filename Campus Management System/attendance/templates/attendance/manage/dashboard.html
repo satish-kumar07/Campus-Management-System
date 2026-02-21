@@ -36,6 +36,51 @@
     <div class="dash-card glass-strong p-3 p-md-4">
       <div class="dash-row">
         <div class="dash-head">
+          <div class="icon-pill icon-green">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+          </div>
+          <div>
+            <div class="fw-semibold">Faculty</div>
+            <div class="smart-muted small">Total faculty</div>
+          </div>
+        </div>
+      </div>
+      <div class="display-6 mb-3">{{ stats.faculty }}</div>
+      <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-open btn-sm" href="{% url 'manage_faculty_create' %}">Add Faculty</a>
+        <a class="btn btn-mini btn-sm" href="{% url 'manage_faculty' %}">View Faculty</a>
+      </div>
+    </div>
+
+    <div class="dash-card glass-strong p-3 p-md-4">
+      <div class="dash-row">
+        <div class="dash-head">
+          <div class="icon-pill icon-blue">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 21h18"></path>
+              <path d="M6 21V7l6-4 6 4v14"></path>
+              <path d="M9 21v-6h6v6"></path>
+            </svg>
+          </div>
+          <div>
+            <div class="fw-semibold">Blocks</div>
+            <div class="smart-muted small">Total blocks</div>
+          </div>
+        </div>
+      </div>
+      <div class="display-6 mb-3">{{ stats.blocks }}</div>
+      <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-open btn-sm" href="{% url 'manage_block_create' %}">Add Block</a>
+        <a class="btn btn-mini btn-sm" href="{% url 'manage_blocks' %}">View Blocks</a>
+      </div>
+    </div>
+
+    <div class="dash-card glass-strong p-3 p-md-4">
+      <div class="dash-row">
+        <div class="dash-head">
           <div class="icon-pill icon-blue">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20"></path>
@@ -81,6 +126,29 @@
       <div class="d-flex gap-2 flex-wrap">
         <a class="btn btn-open btn-sm" href="{% url 'manage_enrollment_create' %}">Add Enrollment</a>
         <a class="btn btn-mini btn-sm" href="{% url 'manage_enrollments' %}">View Enrollments</a>
+      </div>
+    </div>
+
+    <div class="dash-card glass-strong p-3 p-md-4">
+      <div class="dash-row">
+        <div class="dash-head">
+          <div class="icon-pill icon-blue">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 21h18"></path>
+              <path d="M6 21V7l6-4 6 4v14"></path>
+              <path d="M9 21v-6h6v6"></path>
+            </svg>
+          </div>
+          <div>
+            <div class="fw-semibold">Classrooms</div>
+            <div class="smart-muted small">Total rooms</div>
+          </div>
+        </div>
+      </div>
+      <div class="display-6 mb-3">{{ stats.classrooms }}</div>
+      <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-open btn-sm" href="{% url 'manage_classroom_create' %}">Add Classroom</a>
+        <a class="btn btn-mini btn-sm" href="{% url 'manage_classrooms' %}">View Classrooms</a>
       </div>
     </div>
 
@@ -170,6 +238,129 @@
       <div class="d-flex gap-2 flex-wrap">
         <a class="btn btn-mini btn-sm" href="{% url 'manage_sessions' %}">View Sessions</a>
         <a class="btn btn-mini btn-sm" href="{% url 'attendance_home' %}">Open Attendance</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-xl-6">
+      <div class="glass-strong p-3 p-md-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <div class="fw-semibold">Capacity Utilization (Top Classrooms)</div>
+          <div class="smart-muted small">Based on attendance records vs capacity</div>
+        </div>
+
+        {% if classroom_utilization %}
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 table-clean">
+              <thead>
+                <tr>
+                  <th>Classroom</th>
+                  <th>Block</th>
+                  <th>Capacity</th>
+                  <th>Sessions</th>
+                  <th>Records</th>
+                  <th class="text-end">Utilization</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in classroom_utilization %}
+                  <tr>
+                    <td class="fw-semibold">{{ r.classroom__room_number }}</td>
+                    <td class="smart-muted">{{ r.classroom__block__name }}</td>
+                    <td class="smart-muted">{{ r.classroom__capacity }}</td>
+                    <td class="smart-muted">{{ r.sessions_count }}</td>
+                    <td class="smart-muted">{{ r.records_count }}</td>
+                    <td class="text-end fw-semibold">{{ r.utilization_pct|floatformat:1 }}%</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="smart-muted">No utilization data yet. Create sessions and mark attendance to generate insights.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-6">
+      <div class="glass-strong p-3 p-md-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <div class="fw-semibold">Capacity Utilization (Top Blocks)</div>
+          <div class="smart-muted small">Aggregated by block</div>
+        </div>
+
+        {% if block_utilization %}
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 table-clean">
+              <thead>
+                <tr>
+                  <th>Block</th>
+                  <th>Sessions</th>
+                  <th>Records</th>
+                  <th class="text-end">Utilization</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for b in block_utilization %}
+                  <tr>
+                    <td class="fw-semibold">{{ b.classroom__block__name }}</td>
+                    <td class="smart-muted">{{ b.sessions_count }}</td>
+                    <td class="smart-muted">{{ b.records_count }}</td>
+                    <td class="text-end fw-semibold">{{ b.utilization_pct|floatformat:1 }}%</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="smart-muted">No block utilization data yet.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="glass-strong p-3 p-md-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <div class="fw-semibold">Faculty Workload Distribution</div>
+          <div class="smart-muted small">
+            Overloaded: {{ faculty_workload_counts.overloaded }} |
+            Balanced: {{ faculty_workload_counts.balanced }} |
+            Underloaded: {{ faculty_workload_counts.underloaded }} |
+            Unassigned: {{ faculty_workload_counts.unassigned }}
+          </div>
+        </div>
+
+        {% if faculty_workloads %}
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 table-clean">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Department</th>
+                  <th>Email</th>
+                  <th>Assigned (hrs/week)</th>
+                  <th>Max</th>
+                  <th class="text-end">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for f in faculty_workloads %}
+                  <tr>
+                    <td class="fw-semibold">{{ f.name }}</td>
+                    <td class="smart-muted">{{ f.department }}</td>
+                    <td class="smart-muted">{{ f.email }}</td>
+                    <td class="smart-muted">{{ f.assigned_hours }}</td>
+                    <td class="smart-muted">{{ f.max_hours }}</td>
+                    <td class="text-end fw-semibold">{{ f.status }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="smart-muted">No faculty records found.</div>
+        {% endif %}
       </div>
     </div>
   </div>

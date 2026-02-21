@@ -12,7 +12,10 @@
           <div class="manage-tabs mt-3">
             {% url 'manage_dashboard' as manage_home_url %}
             {% url 'manage_students' as manage_students_url %}
+            {% url 'manage_faculty' as manage_faculty_url %}
             {% url 'manage_courses' as manage_courses_url %}
+            {% url 'manage_blocks' as manage_blocks_url %}
+            {% url 'manage_classrooms' as manage_classrooms_url %}
             {% url 'manage_enrollments' as manage_enrollments_url %}
             {% url 'manage_face_samples' as manage_face_url %}
             {% url 'manage_sessions' as manage_sessions_url %}
@@ -20,7 +23,10 @@
 
             <a class="tab-pill {% if request.path == manage_home_url %}is-active{% endif %}" href="{{ manage_home_url }}">Manage Home</a>
             <a class="tab-pill {% if request.path|slice:':15' == manage_students_url %}is-active{% endif %}" href="{{ manage_students_url }}">Students</a>
+            <a class="tab-pill {% if request.path|slice:':14' == manage_faculty_url %}is-active{% endif %}" href="{{ manage_faculty_url }}">Faculty</a>
             <a class="tab-pill {% if request.path|slice:':14' == manage_courses_url %}is-active{% endif %}" href="{{ manage_courses_url }}">Courses</a>
+            <a class="tab-pill {% if request.path|slice:':14' == manage_blocks_url %}is-active{% endif %}" href="{{ manage_blocks_url }}">Blocks</a>
+            <a class="tab-pill {% if request.path|slice:':17' == manage_classrooms_url %}is-active{% endif %}" href="{{ manage_classrooms_url }}">Classrooms</a>
             <a class="tab-pill {% if request.path|slice:':18' == manage_enrollments_url %}is-active{% endif %}" href="{{ manage_enrollments_url }}">Enrollments</a>
             <a class="tab-pill {% if request.path|slice:':16' == manage_face_url %}is-active{% endif %}" href="{{ manage_face_url }}">Face Data</a>
             <a class="tab-pill {% if request.path|slice:':14' == manage_sessions_url %}is-active{% endif %}" href="{{ manage_sessions_url }}">Sessions</a>

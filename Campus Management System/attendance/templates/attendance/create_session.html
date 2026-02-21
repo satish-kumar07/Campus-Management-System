@@ -14,19 +14,61 @@
           <form method="post" class="row g-3">
             {% csrf_token %}
 
-            <div class="col-12">
+            <div class="col-md-6">
               <label class="form-label">Course:</label>
-              {{ form.course }}
+              <select name="course" class="form-select" id="id_course">
+                <option value="">Select a course</option>
+                {% for c in form.fields.course.queryset %}
+                  <option value="{{ c.id }}" data-name="{{ c.name }}" {% if form.course.value|stringformat:'s' == c.id|stringformat:'s' %}selected{% endif %}>{{ c.code }}</option>
+                {% endfor %}
+              </select>
               {% if form.course.errors %}<div class="text-danger small">{{ form.course.errors }}</div>{% endif %}
             </div>
 
-            <div class="col-12">
+            <div class="col-md-6">
+              <label class="form-label">Course name:</label>
+              <input id="courseName" class="form-control" type="text" value="" readonly />
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Block:</label>
+              <select id="blockSelect" class="form-select">
+                <option value="">Select a block</option>
+                {% for c in form.fields.classroom.queryset %}
+                  <option value="{{ c.block.name }}">{{ c.block.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-md-3">
+              <label class="form-label">Room:</label>
+              <select id="roomSelect" class="form-select">
+                <option value="">Select a room</option>
+                {% for c in form.fields.classroom.queryset %}
+                  <option value="{{ c.id }}" data-block="{{ c.block.name }}" data-capacity="{{ c.capacity }}">{{ c.room_number }}</option>
+                {% endfor %}
+              </select>
+              {% if form.classroom.errors %}<div class="text-danger small">{{ form.classroom.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-md-3">
+              <label class="form-label">Capacity:</label>
+              {{ form.capacity }}
+              {% if form.capacity.errors %}<div class="text-danger small">{{ form.capacity.errors }}</div>{% endif %}
+            </div>
+
+            <div class="d-none">
+              {{ form.classroom }}
+              {{ form.block }}
+            </div>
+
+            <div class="col-md-6">
               <label class="form-label">Session start at:</label>
               {{ form.session_start_at }}
               {% if form.session_start_at.errors %}<div class="text-danger small">{{ form.session_start_at.errors }}</div>{% endif %}
             </div>
 
-            <div class="col-12">
+            <div class="col-md-6">
               <label class="form-label">Session label:</label>
               {{ form.session_label }}
               {% if form.session_label.errors %}<div class="text-danger small">{{ form.session_label.errors }}</div>{% endif %}
@@ -41,4 +83,86 @@
       </div>
     </div>
   </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      const courseSel = document.getElementById('id_course');
+      const courseOut = document.getElementById('courseName');
+      const blockSel = document.getElementById('blockSelect');
+      const roomSel = document.getElementById('roomSelect');
+      const classroomHidden = document.getElementById('id_classroom');
+      const blockHidden = document.getElementById('id_block');
+      const capacityInput = document.getElementById('id_capacity');
+
+      function updateCourseName() {
+        if (!courseSel || !courseOut) return;
+        const opt = courseSel.options[courseSel.selectedIndex];
+        const name = opt ? (opt.getAttribute('data-name') || '') : '';
+        courseOut.value = name;
+      }
+
+      function uniqueBlocks() {
+        if (!blockSel) return;
+        const seen = new Set();
+        Array.from(blockSel.options).forEach((o) => {
+          if (!o.value) return;
+          const key = String(o.value || '').trim();
+          if (!key) return;
+          if (seen.has(key)) o.remove();
+          else {
+            seen.add(key);
+            o.value = key;
+          }
+        });
+      }
+
+      function filterRooms() {
+        if (!blockSel || !roomSel) return;
+        const b = String(blockSel.value || '').trim();
+        Array.from(roomSel.options).forEach((o) => {
+          if (!o.value) return;
+          const ob = String(o.getAttribute('data-block') || '').trim();
+          o.hidden = !!b && ob !== b;
+        });
+
+        // Reset room if it doesn't match the selected block
+        const current = roomSel.options[roomSel.selectedIndex];
+        if (current && current.value) {
+          const cb = String(current.getAttribute('data-block') || '').trim();
+          if (b && cb !== b) roomSel.value = '';
+        }
+      }
+
+      function syncRoomToHidden() {
+        if (!roomSel) return;
+        const opt = roomSel.options[roomSel.selectedIndex];
+        const classroomId = opt ? (opt.value || '') : '';
+        const b = opt ? String(opt.getAttribute('data-block') || '').trim() : '';
+        const cap = opt ? (opt.getAttribute('data-capacity') || '') : '';
+
+        if (classroomHidden) classroomHidden.value = classroomId;
+        if (blockHidden) blockHidden.value = b;
+        if (capacityInput) capacityInput.value = cap;
+
+        if (blockSel && b) blockSel.value = b;
+        filterRooms();
+      }
+
+      if (courseSel) courseSel.addEventListener('change', updateCourseName);
+      if (blockSel) blockSel.addEventListener('change', () => {
+        filterRooms();
+        // clear selection when switching blocks
+        if (roomSel) roomSel.value = '';
+        syncRoomToHidden();
+      });
+      if (roomSel) roomSel.addEventListener('change', syncRoomToHidden);
+
+      uniqueBlocks();
+      updateCourseName();
+      filterRooms();
+      syncRoomToHidden();
+    })();
+  </script>
 {% endblock %}

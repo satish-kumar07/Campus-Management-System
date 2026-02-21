@@ -1,0 +1,321 @@
+{% extends 'base.html' %}
+{% block title %}CMS - Face Capture Attendance{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+      <h1 class="h4 mb-1">Face Capture</h1>
+      <div class="smart-muted small">
+        {{ session.course.code }} · {{ session.course.name }}
+        · {{ session.session_start_at|date:"Y-m-d" }} · {{ session.session_start_at|date:"H:i" }}
+        {% if session.session_label %}· {{ session.session_label }}{% endif %}
+      </div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-smart btn-sm" href="{% url 'mark_attendance_choice' session_id=session.id %}">Back</a>
+      <a class="btn btn-soft-blue btn-sm" href="{% url 'session_history' session_id=session.id %}">View History</a>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-6">
+      <div class="glass-strong p-3 p-md-4">
+        <div class="fw-semibold mb-2">Mark by Photo (Face Recognition)</div>
+        <div class="smart-muted small mb-2">Total {{ counts.total }} · Present {{ counts.present }} · Absent {{ counts.absent }} · Unmarked {{ counts.unmarked }}</div>
+        <form method="post" enctype="multipart/form-data" action="{% url 'mark_attendance_by_photo' session_id=session.id %}">
+          {% csrf_token %}
+          <div class="mb-2">
+            <label class="form-label">Photo</label>
+            {{ photo_form.photo }}
+            <div class="form-text">Upload an image or capture from camera below.</div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 mb-3">
+            <button class="btn btn-outline-smart btn-sm" type="button" id="livecam-start">Camera</button>
+            <button class="btn btn-outline-smart btn-sm" type="button" id="livecam-capture" disabled>Capture</button>
+            <button class="btn btn-outline-smart btn-sm" type="button" id="livecam-stop" disabled>Stop</button>
+          </div>
+
+          <div class="smart-muted small mb-3" id="livecam-status"></div>
+
+          <div class="glass p-2 mb-3" style="border-radius: 16px; border: 1px solid rgba(11, 18, 32, 0.10); background: rgba(255,255,255,0.55);">
+            <div class="ratio ratio-16x9" style="border-radius: 14px; overflow: hidden; position: relative;">
+              <video id="livecam-video" autoplay playsinline muted style="width:100%; height:100%; object-fit: cover;"></video>
+              <canvas id="livecam-overlay" style="position:absolute; inset:0; width:100%; height:100%;"></canvas>
+            </div>
+            <canvas id="livecam-canvas" class="d-none"></canvas>
+          </div>
+
+          <div class="d-grid">
+            <button class="btn btn-smart text-white fw-semibold" type="submit">Upload Photo + Auto Mark</button>
+          </div>
+        </form>
+        <div class="small smart-muted mt-3">
+          Better results: upload 5-10 Face Data photos per student in Manage Data.
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="glass-strong p-3 p-md-4">
+        <div class="fw-semibold mb-2">Live Webcam Attendance</div>
+        <div class="small smart-muted mb-2">Starts auto-marking present students continuously.</div>
+
+        <div class="form-check form-switch mb-2">
+          <input class="form-check-input" type="checkbox" role="switch" id="live-require-blink" />
+          <label class="form-check-label" for="live-require-blink">Require Blink (Liveness)</label>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <button class="btn btn-outline-smart btn-sm" type="button" id="live-start">Start</button>
+          <button class="btn btn-outline-smart btn-sm" type="button" id="live-stop" disabled>Stop</button>
+        </div>
+
+        <div class="smart-muted small mb-2" id="live-status"></div>
+
+        <div class="glass p-2" style="border-radius: 16px; border: 1px solid rgba(11, 18, 32, 0.10); background: rgba(255,255,255,0.55);">
+          <div class="ratio ratio-16x9" style="border-radius: 14px; overflow: hidden; position: relative;">
+            <video id="live-video" autoplay playsinline muted style="width:100%; height:100%; object-fit: cover;"></video>
+          </div>
+          <canvas id="live-canvas" class="d-none"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ block.super }}
+  <script>
+    (function () {
+      const startBtn = document.getElementById('livecam-start');
+      const stopBtn = document.getElementById('livecam-stop');
+      const captureBtn = document.getElementById('livecam-capture');
+      const statusEl = document.getElementById('livecam-status');
+      const video = document.getElementById('livecam-video');
+      const overlay = document.getElementById('livecam-overlay');
+      const canvas = document.getElementById('livecam-canvas');
+      const fileInput = document.getElementById('id_photo');
+
+      if (!startBtn || !video || !fileInput) return;
+
+      let stream = null;
+      let rafId = null;
+      let detector = null;
+
+      const setStatus = (msg) => {
+        if (statusEl) statusEl.textContent = msg;
+      };
+
+      const clearOverlay = () => {
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+      };
+
+      const resizeOverlay = () => {
+        const rect = overlay.getBoundingClientRect();
+        overlay.width = Math.floor(rect.width);
+        overlay.height = Math.floor(rect.height);
+      };
+
+      const drawBoxes = (faces) => {
+        resizeOverlay();
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(214, 31, 38, 0.95)';
+        ctx.fillStyle = 'rgba(214, 31, 38, 0.12)';
+
+        for (const face of faces) {
+          const b = face.boundingBox;
+          ctx.fillRect(b.x, b.y, b.width, b.height);
+          ctx.strokeRect(b.x, b.y, b.width, b.height);
+        }
+      };
+
+      const loopDetect = async () => {
+        if (!detector) return;
+        try {
+          const rect = overlay.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0) {
+            rafId = requestAnimationFrame(loopDetect);
+            return;
+          }
+          resizeOverlay();
+          const faces = await detector.detect(video);
+          drawBoxes(faces);
+        } catch (e) {
+          // ignore
+        }
+        rafId = requestAnimationFrame(loopDetect);
+      };
+
+      const startCamera = async () => {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+          video.srcObject = stream;
+          captureBtn.disabled = false;
+          stopBtn.disabled = false;
+          setStatus('Camera started. Align your face and click Capture.');
+
+          if ('FaceDetector' in window) {
+            try {
+              detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+              rafId = requestAnimationFrame(loopDetect);
+            } catch (e) {
+              detector = null;
+            }
+          }
+        } catch (e) {
+          setStatus('Camera permission denied or camera not available.');
+        }
+      };
+
+      const stopCamera = () => {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+        detector = null;
+        clearOverlay();
+        if (stream) {
+          for (const t of stream.getTracks()) t.stop();
+        }
+        stream = null;
+        video.srcObject = null;
+        captureBtn.disabled = true;
+        stopBtn.disabled = true;
+        setStatus('Camera stopped.');
+      };
+
+      const capture = () => {
+        if (!stream) return;
+        const w = video.videoWidth;
+        const h = video.videoHeight;
+        if (!w || !h) return;
+
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, w, h);
+
+        canvas.toBlob((blob) => {
+          if (!blob) return;
+          const file = new File([blob], 'attendance-photo.jpg', { type: 'image/jpeg' });
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          fileInput.files = dt.files;
+          setStatus('Captured and loaded into Photo field. Now click Upload Photo + Auto Mark.');
+        }, 'image/jpeg', 0.92);
+      };
+
+      startBtn.addEventListener('click', startCamera);
+      stopBtn.addEventListener('click', stopCamera);
+      captureBtn.addEventListener('click', capture);
+      window.addEventListener('beforeunload', stopCamera);
+    })();
+  </script>
+
+  <script>
+    (function () {
+      const startBtn = document.getElementById('live-start');
+      const stopBtn = document.getElementById('live-stop');
+      const video = document.getElementById('live-video');
+      const canvas = document.getElementById('live-canvas');
+      const statusEl = document.getElementById('live-status');
+      const requireBlinkEl = document.getElementById('live-require-blink');
+
+      if (!startBtn || !stopBtn || !video || !canvas) return;
+
+      const endpoint = "{% url 'live_attendance_frame' session_id=session.id %}";
+
+      let stream = null;
+      let timer = null;
+      let refreshTimer = null;
+      let inflight = false;
+
+      const setStatus = (msg) => {
+        if (statusEl) statusEl.textContent = msg;
+      };
+
+      const getCookie = (name) => {
+        const v = `; ${document.cookie}`;
+        const parts = v.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return '';
+      };
+
+      const sendFrame = async () => {
+        if (!stream || inflight) return;
+        inflight = true;
+        try {
+          const w = video.videoWidth;
+          const h = video.videoHeight;
+          if (!w || !h) {
+            inflight = false;
+            return;
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify({ image: dataUrl, require_blink: !!requireBlinkEl?.checked }),
+          });
+          const data = await res.json();
+          if (!data.ok) {
+            const extra = data.diag ? ` ${data.diag}` : '';
+            setStatus((data.error || 'Live attendance error') + extra);
+          } else {
+            const tm = (data.top_matches || []).map(m => `${m.id}:${Math.round(m.conf)}`).join('  ');
+            setStatus(`Faces: ${data.faces_detected} | Pending: ${data.pending} | Present: ${data.present_detected} | Marked: ${data.newly_marked} | Trained: ${data.trained_faces} (${data.trained_students}) | Top: ${tm} | Eyes: ${data.eyes}${data.blink_recent ? ' | Blink OK' : ''}`);
+          }
+        } catch (e) {
+          setStatus('Live attendance failed.');
+        } finally {
+          inflight = false;
+        }
+      };
+
+      const start = async () => {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+          video.srcObject = stream;
+          startBtn.disabled = true;
+          stopBtn.disabled = false;
+          setStatus('Live attendance started...');
+          timer = setInterval(sendFrame, 900);
+          refreshTimer = setInterval(() => {
+            window.location.reload();
+          }, 8000);
+        } catch (e) {
+          setStatus('Camera permission denied or camera not available.');
+        }
+      };
+
+      const stop = () => {
+        if (timer) clearInterval(timer);
+        timer = null;
+        if (refreshTimer) clearInterval(refreshTimer);
+        refreshTimer = null;
+        if (stream) {
+          for (const t of stream.getTracks()) t.stop();
+        }
+        stream = null;
+        video.srcObject = null;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        setStatus('Live attendance stopped.');
+      };
+
+      startBtn.addEventListener('click', start);
+      stopBtn.addEventListener('click', stop);
+      window.addEventListener('beforeunload', stop);
+    })();
+  </script>
+{% endblock %}
