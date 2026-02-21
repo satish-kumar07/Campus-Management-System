@@ -33,7 +33,9 @@ from .forms import (
     FaceSampleForm,
     StudentForm,
 )
-from .models import AttendanceRecord, AttendanceSession, Course, Enrollment, FaceSample, Notification, Student
+from courses.models import Course, Enrollment
+
+from .models import AttendanceRecord, AttendanceSession, FaceSample, Notification, Student
 
 from .authz import require_teacher
 
@@ -401,7 +403,7 @@ def delete_session(request: HttpRequest, session_id: int) -> HttpResponse:
 def session_detail(request: HttpRequest, session_id: int) -> HttpResponse:
     session = get_object_or_404(AttendanceSession.objects.select_related("course"), id=session_id)
     students = (
-        Student.objects.filter(enrollments__course=session.course)
+        Student.objects.filter(course_enrollments__course=session.course)
         .order_by("roll_no")
         .distinct()
     )
@@ -433,7 +435,7 @@ def session_detail(request: HttpRequest, session_id: int) -> HttpResponse:
 def mark_attendance_by_photo(request: HttpRequest, session_id: int) -> HttpResponse:
     session = get_object_or_404(AttendanceSession.objects.select_related("course"), id=session_id)
     students = (
-        Student.objects.filter(enrollments__course=session.course)
+        Student.objects.filter(course_enrollments__course=session.course)
         .order_by("roll_no")
         .distinct()
     )
@@ -451,7 +453,7 @@ def mark_attendance_by_photo(request: HttpRequest, session_id: int) -> HttpRespo
     usable_counts: dict[int, int] = {}
     for fs in (
         FaceSample.objects.select_related("student")
-        .filter(student__enrollments__course=session.course)
+        .filter(student__course_enrollments__course=session.course)
         .distinct()
     ):
         try:
@@ -571,7 +573,7 @@ def mark_attendance_by_photo(request: HttpRequest, session_id: int) -> HttpRespo
 def mark_attendance(request: HttpRequest, session_id: int) -> HttpResponse:
     session = get_object_or_404(AttendanceSession.objects.select_related("course"), id=session_id)
     students = (
-        Student.objects.filter(enrollments__course=session.course)
+        Student.objects.filter(course_enrollments__course=session.course)
         .order_by("roll_no")
         .distinct()
     )
@@ -642,7 +644,7 @@ def live_attendance_frame(request: HttpRequest, session_id: int) -> JsonResponse
 
     session = get_object_or_404(AttendanceSession.objects.select_related("course"), id=session_id)
     students = (
-        Student.objects.filter(enrollments__course=session.course)
+        Student.objects.filter(course_enrollments__course=session.course)
         .order_by("roll_no")
         .distinct()
     )
@@ -706,7 +708,7 @@ def live_attendance_frame(request: HttpRequest, session_id: int) -> JsonResponse
     usable_counts: dict[int, int] = {}
     for fs in (
         FaceSample.objects.select_related("student")
-        .filter(student__enrollments__course=session.course)
+        .filter(student__course_enrollments__course=session.course)
         .distinct()
     ):
         try:

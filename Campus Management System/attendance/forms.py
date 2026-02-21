@@ -1,7 +1,9 @@
 from django import forms
 from django.utils import timezone
 
-from .models import AttendanceSession, Course, Enrollment, FaceSample, Student
+from courses.models import Course, Enrollment
+
+from .models import AttendanceSession, FaceSample, Student
 
 
 class MultipleFileInput(forms.ClearableFileInput):
@@ -76,7 +78,7 @@ class AttendanceSessionCreateForm(forms.ModelForm):
 class CourseCreateForm(forms.ModelForm):
     class Meta:
         model = Course
-        fields = ["code", "name"]
+        fields = ["code", "name", "credits", "weekly_hours", "faculty", "classroom"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -88,6 +90,14 @@ class CourseCreateForm(forms.ModelForm):
             self.fields["name"].widget.attrs.update(
                 {"class": "form-control", "placeholder": "Enter course name"}
             )
+        if "credits" in self.fields:
+            self.fields["credits"].widget.attrs.update({"class": "form-control"})
+        if "weekly_hours" in self.fields:
+            self.fields["weekly_hours"].widget.attrs.update({"class": "form-control"})
+        if "faculty" in self.fields:
+            self.fields["faculty"].widget.attrs.update({"class": "form-select"})
+        if "classroom" in self.fields:
+            self.fields["classroom"].widget.attrs.update({"class": "form-select"})
 
 
 class AttendancePhotoUploadForm(forms.Form):

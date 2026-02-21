@@ -29,6 +29,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/login/', RoleAwareLoginView.as_view(), name='login'),
     path('accounts/', include('django.contrib.auth.urls')),
+    path('dashboard/', include('analytics.urls')),
     path('food/', include('food_ordering.urls')),
     path('', include('attendance.urls')),
 ]

@@ -1,0 +1,33 @@
+{% extends "admin/change_list.html" %}
+
+{% block result_list %}
+  {% if grouped_by_course %}
+    {% for course_label, enrollments in grouped_by_course %}
+      <div class="module" style="margin-bottom: 16px;">
+        <h2>{{ course_label }}</h2>
+        <div class="results">
+          <table id="result_list">
+            <thead>
+              <tr>
+                <th scope="col">Student</th>
+                <th scope="col">Roll No</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for obj in enrollments %}
+                <tr>
+                  <th class="field-student">
+                    <a href="{% url 'admin:courses_enrollment_change' obj.pk %}">{{ obj.student.full_name }}</a>
+                  </th>
+                  <td class="field-roll_no">{{ obj.student.roll_no }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    {{ block.super }}
+  {% endif %}
+{% endblock %}

@@ -61,6 +61,8 @@ def _get_current_student(request: HttpRequest):
     username = (getattr(request.user, "username", "") or "").strip()
     if not username:
         return None
+    if username.isdigit():
+        return Student.objects.filter(uid=int(username)).first() or Student.objects.filter(roll_no=username).first()
     return Student.objects.filter(roll_no=username).first()
 
 

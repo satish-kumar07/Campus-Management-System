@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block title %}Analytics Dashboard{% endblock %}
+
+{% block content %}
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-4">
+    <div>
+      <h3 class="fw-bold mb-1">Analytics Dashboard</h3>
+      <div class="text-muted">Capacity utilization and workload insights.</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-dark" href="{% url 'home' %}">Home</a>
+      <a class="btn btn-outline-dark" href="{% url 'admin:index' %}">Admin</a>
+    </div>
+  </div>
+
+  {% if suggestions %}
+    <div class="alert alert-warning shadow-sm" role="alert">
+      <div class="fw-semibold mb-2">Smart Suggestions</div>
+      <div class="d-grid gap-1">
+        {% for s in suggestions %}
+          <div>{{ s }}</div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-bottom-0 pt-3">
+          <h5 class="fw-bold mb-0">Blocks</h5>
+        </div>
+        <div class="card-body">
+          {% if blocks %}
+            <div class="d-grid gap-2">
+              {% for b in blocks %}
+                <div class="p-2 border rounded bg-light">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="fw-semibold">{{ b.name }}</div>
+                    <div class="fw-semibold">{{ b.utilization_percentage|floatformat:1 }}%</div>
+                  </div>
+                  <div class="text-muted small">Floors: {{ b.total_floors }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-muted">No blocks found.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-bottom-0 pt-3">
+          <h5 class="fw-bold mb-0">Classrooms</h5>
+        </div>
+        <div class="card-body">
+          {% if classrooms %}
+            <div class="d-grid gap-2">
+              {% for r in classrooms %}
+                <div class="p-2 border rounded bg-light">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="fw-semibold">{{ r.block.name }} - {{ r.room_number }}</div>
+                    <div class="fw-semibold">{{ r.utilization_percentage|floatformat:1 }}%</div>
+                  </div>
+                  <div class="text-muted small">Capacity: {{ r.capacity }} | Type: {{ r.get_room_type_display }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-muted">No classrooms found.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-white border-bottom-0 pt-3">
+          <h5 class="fw-bold mb-0">Faculty</h5>
+        </div>
+        <div class="card-body">
+          {% if faculty %}
+            <div class="d-grid gap-2">
+              {% for f in faculty %}
+                <div class="p-2 border rounded bg-light">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="fw-semibold">{{ f.name }}</div>
+                    <div class="badge text-bg-light border">{{ f.workload_status }}</div>
+                  </div>
+                  <div class="text-muted small">Dept: {{ f.department }} | Workload: {{ f.current_workload }}/{{ f.max_workload_hours }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-muted">No faculty found.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,8 +1,21 @@
-from django.db import models
+from django.conf import settings
+from django.db import models, transaction
+from django.db.models import Max
 from django.utils import timezone
 
+
 class Student(models.Model):
+    UID_START = 12311000
+
     roll_no = models.CharField(max_length=32, unique=True)
+    uid = models.BigIntegerField(unique=True, null=True, blank=True, db_index=True)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attendance_student",
+    )
     full_name = models.CharField(max_length=128)
     email = models.EmailField(blank=True)
     parent_email = models.EmailField(blank=True)
@@ -11,28 +24,18 @@ class Student(models.Model):
     def __str__(self) -> str:
         return f"{self.roll_no} - {self.full_name}"
 
-
-class Course(models.Model):
-    code = models.CharField(max_length=32, unique=True)
-    name = models.CharField(max_length=128)
-
-    def __str__(self) -> str:
-        return f"{self.code} - {self.name}"
-
-
-class Enrollment(models.Model):
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="enrollments")
-    course = models.ForeignKey(Course, on_delete=models.CASCADE)
-
-    class Meta:
-        unique_together = ("student", "course")
-
-    def __str__(self) -> str:
-        return f"{self.student.roll_no} -> {self.course.code}"
+    def save(self, *args, **kwargs):
+        if self.uid is None:
+            with transaction.atomic():
+                max_uid = Student.objects.aggregate(m=Max("uid")).get("m")
+                next_uid = (int(max_uid) + 1) if max_uid is not None else self.UID_START
+                self.uid = next_uid
+                return super().save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
 
 class AttendanceSession(models.Model):
-    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    course = models.ForeignKey("courses.Course", on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     session_start_at = models.DateTimeField(default=timezone.now)
     session_date = models.DateField()
