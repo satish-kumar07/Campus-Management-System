@@ -71,7 +71,12 @@ WSGI_APPLICATION = 'smartlpu.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': Path(
+            os.environ.get(
+                'SMARTLPU_SQLITE_PATH',
+                os.environ.get('CMS_SQLITE_PATH', str(BASE_DIR / 'db.sqlite3')),
+            )
+        ),
     }
 }
 
@@ -104,6 +109,7 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -111,6 +117,9 @@ MEDIA_ROOT = BASE_DIR / 'media'
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
+
+_csrf_raw = os.environ.get('SMARTLPU_CSRF_TRUSTED_ORIGINS', os.environ.get('CMS_CSRF_TRUSTED_ORIGINS', ''))
+CSRF_TRUSTED_ORIGINS = [u.strip() for u in _csrf_raw.split(',') if u.strip()] if _csrf_raw else []
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'

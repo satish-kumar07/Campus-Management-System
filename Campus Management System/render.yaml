@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: campus-management-system
+    env: python
+    plan: free
+    buildCommand: |
+      pip install -r requirements.txt
+      python manage.py collectstatic --noinput
+      python manage.py migrate
+    startCommand: gunicorn smartlpu.wsgi:application
+    healthCheckPath: /
+    envVars:
+      - key: SMARTLPU_DEBUG
+        value: "0"
+      - key: SMARTLPU_ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: SMARTLPU_CSRF_TRUSTED_ORIGINS
+        value: "https://*.onrender.com"
+      - key: SMARTLPU_SECRET_KEY
+        generateValue: true
+      - key: SMARTLPU_SQLITE_PATH
+        value: "/var/data/db.sqlite3"
+      - key: SMARTLPU_EMAIL_HOST_USER
+        sync: false
+      - key: SMARTLPU_EMAIL_HOST_PASSWORD
+        sync: false
+      - key: SMARTLPU_DEFAULT_FROM_EMAIL
+        sync: false
+    disk:
+      name: cms-data
+      mountPath: /var/data
+      sizeGB: 1
