@@ -22,6 +22,13 @@ class Classroom(models.Model):
     class Meta:
         unique_together = ("block", "room_number")
 
+    def __str__(self) -> str:
+        block_name = getattr(getattr(self, "block", None), "name", "")
+        room = getattr(self, "room_number", "")
+        if block_name and room:
+            return f"{block_name} - {room}"
+        return room or f"Classroom {self.pk}"
+
     def utilization_percentage(self):
         total_students = sum((course.enrollments.count() for course in self.course_set.all()), 0)
         return (total_students / self.capacity) * 100 if self.capacity > 0 else 0

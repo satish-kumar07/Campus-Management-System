@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+
+{% block title %}CMS - Attendance Details{% endblock %}
+
+{% block content %}
+  <div class="glass-strong p-3 p-md-4 mb-3">
+    <div class="d-flex align-items-center justify-content-between">
+      <div>
+        <div class="fw-semibold">Attendance Details</div>
+        {% if student %}
+          <div class="smart-muted small">{{ student.full_name }} | Reg: {{ student.uid }}</div>
+        {% endif %}
+      </div>
+      <a class="btn btn-outline-dark btn-sm" href="{% url 'student_dashboard' %}">Back</a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-7">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <div class="fw-semibold mb-3">Overall Summary</div>
+
+          <div class="d-flex flex-wrap align-items-center gap-3">
+            <div style="position:relative; width:96px; height:96px; border-radius:50%; background: conic-gradient(#198754 0deg {{ present_deg|default:0 }}deg, #dc3545 {{ present_deg|default:0 }}deg {{ present_deg|default:0|add:absent_deg|default:0 }}deg, #e9ecef {{ present_deg|default:0|add:absent_deg|default:0 }}deg 360deg);">
+              <div style="position:absolute; inset:10px; background:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; text-align:center;">
+                <div>
+                  <div class="fw-semibold">{{ stats.overall_attendance_pct|default:0 }}%</div>
+                  <div class="text-muted" style="font-size:12px; line-height:1;">Overall</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="ms-lg-2">
+              <div class="fw-semibold">Attendance</div>
+              <div class="text-muted small">% = Present / Total Conducted Classes</div>
+            </div>
+          </div>
+
+          <div class="row g-2 mt-3">
+            <div class="col-6 col-lg-3">
+              <div class="border rounded p-2">
+                <div class="text-muted small">Total Classes</div>
+                <div class="fw-semibold">{{ stats.total_sessions|default:0 }}</div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-3">
+              <div class="border rounded p-2">
+                <div class="text-muted small">Classes Taken</div>
+                <div class="fw-semibold">{{ stats.taken|default:0 }}</div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-3">
+              <div class="border rounded p-2">
+                <div class="text-muted small">Present</div>
+                <div class="fw-semibold">{{ stats.present|default:0 }}</div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-3">
+              <div class="border rounded p-2">
+                <div class="text-muted small">Absent</div>
+                <div class="fw-semibold">{{ stats.absent|default:0 }}</div>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="text-muted small">Pending (not marked yet): {{ pending|default:0 }}</div>
+            </div>
+          </div>
+
+          <div class="text-muted small mt-3">Threshold: {{ threshold }}%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <div class="fw-semibold mb-2">Legend</div>
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span style="display:inline-block; width:12px; height:12px; border-radius:3px; background:#198754;"></span>
+            <div class="small">Present</div>
+            <div class="small fw-semibold">{{ stats.present|default:0 }}</div>
+          </div>
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span style="display:inline-block; width:12px; height:12px; border-radius:3px; background:#dc3545;"></span>
+            <div class="small">Absent</div>
+            <div class="small fw-semibold">{{ stats.absent|default:0 }}</div>
+          </div>
+          <div class="d-flex align-items-center justify-content-between">
+            <span style="display:inline-block; width:12px; height:12px; border-radius:3px; background:#e9ecef;"></span>
+            <div class="small">Pending</div>
+            <div class="small fw-semibold">{{ pending|default:0 }}</div>
+          </div>
+
+          <hr class="my-3" />
+
+          <div class="fw-semibold mb-2">Status Rules</div>
+          <div class="d-flex flex-wrap gap-2">
+            <span class="badge text-bg-success">Safe: ≥ {{ threshold }}%</span>
+            <span class="badge text-bg-warning">Warning: 60–74%</span>
+            <span class="badge text-bg-danger">Critical: &lt; 60%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <div class="fw-semibold mb-2">Per Course Breakdown</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle mb-0">
+          <thead>
+            <tr class="text-muted small">
+              <th>Course</th>
+              <th class="text-end">%</th>
+              <th class="text-end">Total</th>
+              <th class="text-end">Taken</th>
+              <th class="text-end">Present</th>
+              <th class="text-end">Absent</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in per_course %}
+              <tr>
+                <td>
+                  {% if r.course %}
+                    <div class="fw-semibold">{{ r.course.code }}</div>
+                    <div class="text-muted small">{{ r.course.name }}</div>
+                  {% else %}
+                    <div class="text-muted">-</div>
+                  {% endif %}
+                </td>
+                <td class="text-end fw-semibold">{{ r.pct|default:0 }}%</td>
+                <td class="text-end">{{ r.total|default:0 }}</td>
+                <td class="text-end">{{ r.taken|default:0 }}</td>
+                <td class="text-end">{{ r.present|default:0 }}</td>
+                <td class="text-end">{{ r.absent|default:0 }}</td>
+                <td>
+                  {% if r.below %}
+                    <span class="badge text-bg-warning">Below</span>
+                  {% else %}
+                    <span class="badge text-bg-success">OK</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="7" class="text-muted">No enrollments found.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endblock %}

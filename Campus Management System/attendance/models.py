@@ -44,6 +44,30 @@ class Student(models.Model):
 
 
 class AttendanceSession(models.Model):
+    TYPE_REGULAR = "regular"
+    TYPE_MAKEUP = "makeup"
+
+    MODE_PHYSICAL = "physical"
+    MODE_ONLINE = "online"
+    MODE_CHOICES = [
+        (MODE_PHYSICAL, "Physical"),
+        (MODE_ONLINE, "Online"),
+    ]
+
+    ATTENDANCE_MANUAL = "manual"
+    ATTENDANCE_QR = "qr"
+    ATTENDANCE_FACE = "face"
+    ATTENDANCE_MODE_CHOICES = [
+        (ATTENDANCE_MANUAL, "Manual"),
+        (ATTENDANCE_QR, "QR"),
+        (ATTENDANCE_FACE, "Face"),
+    ]
+
+    TYPE_CHOICES = [
+        (TYPE_REGULAR, "Regular"),
+        (TYPE_MAKEUP, "Make-Up"),
+    ]
+
     course = models.ForeignKey("courses.Course", on_delete=models.CASCADE)
     subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True)
     classroom = models.ForeignKey(
@@ -52,13 +76,21 @@ class AttendanceSession(models.Model):
         null=True,
         blank=True,
     )
+    session_type = models.CharField(max_length=16, choices=TYPE_CHOICES, default=TYPE_REGULAR)
+    remedial_code = models.CharField(max_length=16, blank=True, db_index=True)
+    remedial_expires_at = models.DateTimeField(null=True, blank=True)
     block = models.CharField(max_length=32, blank=True)
     capacity = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     session_start_at = models.DateTimeField(default=timezone.now)
+    session_end_at = models.DateTimeField(null=True, blank=True)
     session_date = models.DateField()
     time_slot = models.CharField(max_length=32, blank=True)
     session_label = models.CharField(max_length=64, blank=True)
+    reason = models.TextField(blank=True)
+    mode = models.CharField(max_length=16, choices=MODE_CHOICES, blank=True)
+    attendance_mode = models.CharField(max_length=16, choices=ATTENDANCE_MODE_CHOICES, blank=True)
+    notify_students = models.BooleanField(default=True)
 
     def __str__(self) -> str:
         label = self.session_label or "Session"

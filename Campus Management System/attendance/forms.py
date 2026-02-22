@@ -1,4 +1,7 @@
+from datetime import datetime
+
 from django import forms
+from django.db.models import Q
 from django.utils import timezone
 
 from courses.models import Course, Enrollment
@@ -186,13 +189,192 @@ class AttendancePhotoUploadForm(forms.Form):
     )
 
 
+class MakeupSessionCreateForm(forms.ModelForm):
+    session_date = forms.DateField(
+        widget=forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+    )
+    start_time = forms.TimeField(
+        widget=forms.TimeInput(attrs={"type": "time", "class": "form-control", "step": "60"}),
+    )
+    end_time = forms.TimeField(
+        widget=forms.TimeInput(attrs={"type": "time", "class": "form-control", "step": "60"}),
+    )
+    reason = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Reason for make-up class"}),
+    )
+    mode = forms.ChoiceField(
+        choices=AttendanceSession.MODE_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    attendance_mode = forms.ChoiceField(
+        choices=AttendanceSession.ATTENDANCE_MODE_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={"class": "form-select"}),
+        label="Attendance Mode",
+    )
+    notify_students = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        label="Notify Students",
+    )
+
+    class Meta:
+        model = AttendanceSession
+        fields = [
+            "course",
+            "classroom",
+            "session_label",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if "course" in self.fields:
+            self.fields["course"].empty_label = "Select a course"
+            self.fields["course"].widget.attrs.update({"class": "form-select"})
+        if "classroom" in self.fields:
+            self.fields["classroom"].queryset = Classroom.objects.select_related("block").order_by(
+                "block__name",
+                "room_number",
+            )
+            self.fields["classroom"].empty_label = "Select a classroom"
+            self.fields["classroom"].required = False
+            self.fields["classroom"].widget.attrs.update({"class": "form-select"})
+        if "session_label" in self.fields:
+            self.fields["session_label"].required = False
+            self.fields["session_label"].widget.attrs.update(
+                {"class": "form-control", "placeholder": "Enter session label"}
+            )
+
+        if not getattr(self.instance, "pk", None):
+            now = timezone.localtime(timezone.now())
+            if not self.initial.get("session_date"):
+                self.initial["session_date"] = now.date()
+            if not self.initial.get("start_time"):
+                self.initial["start_time"] = (
+                    now.replace(second=0, microsecond=0) + timezone.timedelta(minutes=1)
+                ).time()
+            if not self.initial.get("end_time"):
+                self.initial["end_time"] = (
+                    now.replace(second=0, microsecond=0) + timezone.timedelta(minutes=61)
+                ).time()
+
+    def clean(self):
+        cleaned = super().clean()
+        course = cleaned.get("course")
+        classroom = cleaned.get("classroom")
+        date = cleaned.get("session_date")
+        start = cleaned.get("start_time")
+        end = cleaned.get("end_time")
+
+        if date and start and end:
+            if end <= start:
+                raise forms.ValidationError("End time must be after start time.")
+            tz = timezone.get_current_timezone()
+            start_dt = timezone.make_aware(datetime.combine(date, start), tz)
+            end_dt = timezone.make_aware(datetime.combine(date, end), tz)
+            if start_dt < timezone.now():
+                raise forms.ValidationError("Session time cannot be in the past.")
+
+            if course is not None:
+                dup = AttendanceSession.objects.filter(
+                    course=course,
+                    session_type=AttendanceSession.TYPE_MAKEUP,
+                    session_start_at__lt=end_dt,
+                ).filter(
+                    Q(session_end_at__gt=start_dt)
+                    | Q(session_end_at__isnull=True, session_start_at__gt=start_dt)
+                )
+                if getattr(self.instance, "pk", None):
+                    dup = dup.exclude(pk=self.instance.pk)
+                if dup.exists():
+                    conflict = dup.order_by("session_start_at").first()
+                    if conflict is not None:
+                        c_start = timezone.localtime(getattr(conflict, "session_start_at", start_dt))
+                        c_end_raw = getattr(conflict, "session_end_at", None)
+                        c_end = timezone.localtime(c_end_raw) if c_end_raw else None
+                        window = (
+                            f"{c_start.strftime('%Y-%m-%d %H:%M')}"
+                            + (f" to {c_end.strftime('%H:%M')}" if c_end else "")
+                        )
+                        raise forms.ValidationError(
+                            f"A make-up session for this course overlaps with the selected time range (existing: {window})."
+                        )
+                    raise forms.ValidationError(
+                        "A make-up session for this course overlaps with the selected time range."
+                    )
+
+            if classroom is not None:
+                busy = AttendanceSession.objects.filter(
+                    classroom=classroom,
+                    session_start_at__lt=end_dt,
+                ).filter(
+                    Q(session_end_at__gt=start_dt) | Q(session_end_at__isnull=True, session_start_at__gt=start_dt)
+                )
+                if getattr(self.instance, "pk", None):
+                    busy = busy.exclude(pk=self.instance.pk)
+                if busy.exists():
+                    raise forms.ValidationError(
+                        "Selected classroom is busy during this time range."
+                    )
+        return cleaned
+
+    def save(self, commit=True):
+        obj: AttendanceSession = super().save(commit=False)
+
+        date = self.cleaned_data.get("session_date")
+        start = self.cleaned_data.get("start_time")
+        end = self.cleaned_data.get("end_time")
+        tz = timezone.get_current_timezone()
+
+        if date is not None and start is not None:
+            start_dt = timezone.make_aware(datetime.combine(date, start), tz)
+            obj.session_start_at = start_dt
+            local_dt = timezone.localtime(start_dt)
+            obj.session_date = local_dt.date()
+            obj.time_slot = local_dt.strftime("%H:%M")
+
+        if date is not None and end is not None:
+            obj.session_end_at = timezone.make_aware(datetime.combine(date, end), tz)
+
+        obj.reason = self.cleaned_data.get("reason") or ""
+        obj.mode = self.cleaned_data.get("mode") or ""
+        obj.attendance_mode = self.cleaned_data.get("attendance_mode") or ""
+        obj.notify_students = bool(self.cleaned_data.get("notify_students"))
+
+        if commit:
+            obj.save()
+            self.save_m2m()
+        return obj
+
+
+class RemedialCodeEntryForm(forms.Form):
+    code = forms.CharField(
+        max_length=16,
+        widget=forms.TextInput(
+            attrs={"class": "form-control", "placeholder": "Enter remedial code"}
+        ),
+    )
+
+
 class StudentForm(forms.ModelForm):
+    password = forms.CharField(
+        required=False,
+        widget=forms.PasswordInput(attrs={"class": "form-control"}),
+    )
+
     class Meta:
         model = Student
         fields = ["roll_no", "full_name", "email", "parent_email", "parent_phone"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if self.instance is None or getattr(self.instance, "pk", None) is None:
+            self.fields["password"].required = True
+        self.fields["password"].widget.attrs.update({"placeholder": "Set student login password"})
         if "roll_no" in self.fields:
             self.fields["roll_no"].widget.attrs.update(
                 {"class": "form-control", "placeholder": "e.g. CSE111023"}
@@ -213,6 +395,52 @@ class StudentForm(forms.ModelForm):
             self.fields["parent_phone"].widget.attrs.update(
                 {"class": "form-control", "placeholder": "Enter parent's phone number"}
             )
+
+    def save(self, commit=True):
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Group
+
+        password = (self.cleaned_data.get("password") or "").strip()
+        student: Student = super().save(commit=False)
+
+        if commit:
+            student.save()
+            self.save_m2m()
+
+        if student.uid is None:
+            return student
+
+        User = get_user_model()
+        username = str(student.uid)
+
+        user = student.user
+        if user is None:
+            user = User.objects.filter(username=username).first()
+        if user is None:
+            user = User(username=username)
+
+        if getattr(user, "username", "") != username:
+            user.username = username
+
+        if getattr(student, "email", ""):
+            user.email = student.email
+
+        if password:
+            user.set_password(password)
+
+        user.save()
+
+        group, _ = Group.objects.get_or_create(name="STUDENT")
+        try:
+            user.groups.add(group)
+        except Exception:
+            pass
+
+        if student.user_id != user.id:
+            student.user = user
+            student.save(update_fields=["user"])
+
+        return student
 
 
 class EnrollmentForm(forms.ModelForm):

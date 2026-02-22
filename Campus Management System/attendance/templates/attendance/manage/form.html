@@ -124,6 +124,14 @@
                       {% if form.parent_phone.errors %}<div class="text-danger small">{{ form.parent_phone.errors }}</div>{% endif %}
                     </div>
                   {% endif %}
+
+                  {% if form.password %}
+                    <div class="col-12 col-md-6">
+                      <label class="form-label">Password</label>
+                      {{ form.password }}
+                      {% if form.password.errors %}<div class="text-danger small">{{ form.password.errors }}</div>{% endif %}
+                    </div>
+                  {% endif %}
                 {% else %}
                   {% for field in form %}
                     <div class="col-12 col-md-6">

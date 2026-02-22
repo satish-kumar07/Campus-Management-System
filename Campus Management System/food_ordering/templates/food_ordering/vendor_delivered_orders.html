@@ -30,6 +30,7 @@
               <tr>
                 <th>Order</th>
                 <th>Stall</th>
+                <th>Pickup Slot</th>
                 <th>Items</th>
                 <th>Status</th>
                 <th>Pickup Code</th>
@@ -41,6 +42,14 @@
                 <tr>
                   <td>#{{ o.id }}</td>
                   <td>{{ o.stall.name }}</td>
+                  <td class="text-nowrap">
+                    {% if o.break_slot %}
+                      <div class="fw-semibold">{{ o.break_slot.start_time }}–{{ o.break_slot.end_time }}</div>
+                      <div class="text-muted small">{{ o.break_slot.slot_date }}</div>
+                    {% else %}
+                      <span class="text-muted">-</span>
+                    {% endif %}
+                  </td>
                   <td>
                     {% for it in o.items.all %}
                       <div class="small">{{ it.menu_item.name }} x{{ it.qty }}</div>

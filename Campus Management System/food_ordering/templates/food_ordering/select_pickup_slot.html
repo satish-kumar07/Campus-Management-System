@@ -78,14 +78,14 @@
                         {% if not c.can_fit %}disabled{% endif %}
                       />
                       <div>
-                        <div class="fw-semibold">{{ c.slot.slot_date }} {{ c.slot.start_time }}–{{ c.slot.end_time }}</div>
+                        <div class="fw-semibold">{{ c.slot.start_time }}–{{ c.slot.end_time }}</div>
                         <div class="text-muted small">
                           {% if not c.is_open %}
                             Closed
                           {% elif not c.feasible %}
                             Not enough time for prep
                           {% else %}
-                            Remaining: {{ c.remaining_items }} items
+                            Remaining: {{ c.remaining_orders }} orders
                           {% endif %}
                         </div>
                       </div>

@@ -6,8 +6,13 @@ from django.db import transaction
 from django.db.models import BooleanField, Case, Count, F, FloatField, Sum, Value, When, Q
 from django.db.models.functions import Coalesce
 from django.http import HttpRequest, HttpResponse
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from datetime import datetime
+
+import random
+import string
 
 import logging
 
@@ -33,6 +38,8 @@ from .face_recognition import (
 from .forms import (
     AttendancePhotoUploadForm,
     AttendanceSessionCreateForm,
+    MakeupSessionCreateForm,
+    RemedialCodeEntryForm,
     CourseCreateForm,
     EnrollmentForm,
     FacultyForm,
@@ -49,11 +56,130 @@ from .models import AttendanceRecord, AttendanceSession, FaceSample, Notificatio
 from blocks.models import Block
 
 from .authz import require_teacher
+from .authz import require_student
 
 
 _live_state: dict[tuple[int, int], dict[str, object]] = {}
 
 logger = logging.getLogger(__name__)
+
+
+def _format_ago(dt) -> str:
+    try:
+        delta = timezone.now() - dt
+        secs = int(delta.total_seconds())
+        if secs < 60:
+            return "just now"
+        mins = secs // 60
+        if mins < 60:
+            return f"{mins} min ago"
+        hrs = mins // 60
+        if hrs < 24:
+            return f"{hrs} hr ago"
+        days = hrs // 24
+        return f"{days} day ago" if days == 1 else f"{days} days ago"
+    except Exception:
+        return "-"
+
+
+def _student_course_ids(student: Student) -> list[int]:
+    return list(Enrollment.objects.filter(student=student).values_list("course_id", flat=True))
+
+
+def _student_attendance_stats(*, student: Student, course_ids: list[int]) -> dict[str, object]:
+    courses_count = int(len(course_ids))
+    overall_attendance_pct = 0
+    below_threshold_courses = 0
+
+    total_sessions = 0
+    present = 0
+    absent = 0
+    pending = 0
+
+    if course_ids:
+        now = timezone.now()
+        session_types = [AttendanceSession.TYPE_REGULAR, AttendanceSession.TYPE_MAKEUP]
+        regular_qs = AttendanceSession.objects.filter(
+            course_id__in=course_ids,
+            session_type__in=session_types,
+            session_start_at__lte=now,
+        )
+
+        total_sessions = regular_qs.count()
+        present = AttendanceRecord.objects.filter(
+            student=student,
+            session__course_id__in=course_ids,
+            session__session_type__in=session_types,
+            session__session_start_at__lte=now,
+            status=AttendanceRecord.STATUS_PRESENT,
+        ).count()
+        absent = AttendanceRecord.objects.filter(
+            student=student,
+            session__course_id__in=course_ids,
+            session__session_type__in=session_types,
+            session__session_start_at__lte=now,
+            status=AttendanceRecord.STATUS_ABSENT,
+        ).count()
+
+        taken = int(present) + int(absent)
+        pending = max(int(total_sessions) - int(taken), 0)
+
+        denom = int(total_sessions)
+        if denom > 0:
+            overall_attendance_pct = int(round((int(present) / float(denom)) * 100.0))
+
+        threshold = 75
+        below = 0
+        for cid in course_ids:
+            total_c = AttendanceSession.objects.filter(
+                course_id=cid,
+                session_type__in=session_types,
+                session_start_at__lte=now,
+            ).count()
+            present_c = AttendanceRecord.objects.filter(
+                student=student,
+                session__course_id=cid,
+                session__session_type__in=session_types,
+                session__session_start_at__lte=now,
+                status=AttendanceRecord.STATUS_PRESENT,
+            ).count()
+            absent_c = AttendanceRecord.objects.filter(
+                student=student,
+                session__course_id=cid,
+                session__session_type__in=session_types,
+                session__session_start_at__lte=now,
+                status=AttendanceRecord.STATUS_ABSENT,
+            ).count()
+            taken_c = int(present_c) + int(absent_c)
+            denom_c = int(total_c)
+            pct_c = int(round((int(present_c) / float(denom_c)) * 100.0)) if denom_c > 0 else 0
+            if pct_c < threshold:
+                below += 1
+        below_threshold_courses = int(below)
+
+    return {
+        "courses_count": int(courses_count),
+        "overall_attendance_pct": int(overall_attendance_pct),
+        "below_threshold_courses": int(below_threshold_courses),
+        "total_sessions": int(total_sessions),
+        "present": int(present),
+        "absent": int(absent),
+        "taken": int(int(present) + int(absent)),
+        "pending": int(pending),
+    }
+
+
+def _generate_remedial_code() -> str:
+    alphabet = string.ascii_uppercase + string.digits
+    return "".join(random.choice(alphabet) for _ in range(8))
+
+
+def _unique_remedial_code() -> str:
+    for _ in range(20):
+        code = _generate_remedial_code()
+        if not AttendanceSession.objects.filter(remedial_code=code).exists():
+            return code
+    return _generate_remedial_code()
 
 
 def _session_counts(*, session: AttendanceSession) -> dict[str, int]:
@@ -170,12 +296,61 @@ def home(request: HttpRequest) -> HttpResponse:
         "face_samples": FaceSample.objects.count(),
         "sessions": AttendanceSession.objects.count(),
     }
+
+    now_dt = timezone.now()
+    upcoming_qs = AttendanceSession.objects.select_related("course").filter(session_start_at__gt=now_dt)
+    upcoming_sessions = list(upcoming_qs.order_by("session_start_at")[:6])
+    active_now_count = AttendanceSession.objects.filter(session_start_at__lte=now_dt).filter(
+        Q(session_end_at__gte=now_dt) | Q(session_end_at__isnull=True)
+    ).count()
+    makeup_pending_count = AttendanceSession.objects.filter(session_type=AttendanceSession.TYPE_MAKEUP).filter(
+        Q(session_end_at__gt=now_dt) | Q(session_end_at__isnull=True, session_start_at__gt=now_dt)
+    ).count()
+
+    util_qs = AttendanceSession.objects.filter(classroom__isnull=False, classroom__capacity__gt=0)
+    classroom_utilization = list(
+        util_qs.values(
+            "classroom_id",
+            "classroom__room_number",
+            "classroom__block__name",
+            "classroom__capacity",
+        )
+        .annotate(
+            sessions_count=Count("id"),
+            records_count=Count("attendancerecord"),
+        )
+        .annotate(
+            utilization_pct=(
+                100.0
+                * F("records_count")
+                / Coalesce((F("sessions_count") * F("classroom__capacity")), 1)
+            )
+        )
+        .order_by("-utilization_pct")[:8]
+    )
+
+    block_utilization = list(
+        util_qs.values("classroom__block__name")
+        .annotate(
+            sessions_count=Count("id"),
+            records_count=Count("attendancerecord"),
+            seats_offered=Sum("classroom__capacity"),
+        )
+        .annotate(utilization_pct=(100.0 * F("records_count") / Coalesce(F("seats_offered"), 1)))
+        .order_by("-utilization_pct")[:6]
+    )
     return render(
         request,
         "attendance/dashboard.html",
         {
             "recent_sessions": recent_sessions,
             "stats": stats,
+            "makeup_pending": int(makeup_pending_count),
+            "upcoming_count": int(upcoming_qs.count()),
+            "active_now": int(active_now_count),
+            "upcoming_sessions": upcoming_sessions,
+            "classroom_utilization": classroom_utilization,
+            "block_utilization": block_utilization,
         },
     )
 
@@ -183,26 +358,434 @@ def home(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_teacher
 def attendance_home(request: HttpRequest) -> HttpResponse:
-    sessions = (
+    user = getattr(request, "user", None)
+    email = (getattr(user, "email", "") or "").strip().lower()
+    faculty = Faculty.objects.filter(email__iexact=email).first() if email else None
+
+    allowed_courses = Course.objects.order_by("code")
+    if faculty is not None:
+        allowed_courses = allowed_courses.filter(faculty=faculty)
+
+    now_dt = timezone.now()
+
+    base_qs = (
         AttendanceSession.objects.select_related("course")
+        .filter(course__in=allowed_courses)
         .annotate(
+            present_count=Count(
+                "attendancerecord",
+                filter=Q(attendancerecord__status=AttendanceRecord.STATUS_PRESENT),
+            ),
+            absent_count=Count(
+                "attendancerecord",
+                filter=Q(attendancerecord__status=AttendanceRecord.STATUS_ABSENT),
+            ),
+            total_count=Count("attendancerecord"),
             enrolled_count=Count("course__enrollments", distinct=True),
-            records_count=Count("attendancerecord", distinct=True),
         )
         .annotate(
             is_completed=Case(
                 When(
                     enrolled_count__gt=0,
-                    records_count__gte=F("enrolled_count"),
+                    total_count__gte=F("enrolled_count"),
                     then=Value(True),
                 ),
                 default=Value(False),
                 output_field=BooleanField(),
             )
         )
-        .order_by("-created_at")[:20]
     )
-    return render(request, "attendance/attendance_home.html", {"sessions": sessions})
+
+    pending_sessions = list(
+        base_qs.filter(session_start_at__lte=now_dt)
+        .filter(is_completed=False)
+        .order_by("session_start_at")[:15]
+    )
+
+    upcoming_sessions = list(
+        base_qs.filter(session_start_at__gt=now_dt)
+        .exclude(session_type=AttendanceSession.TYPE_MAKEUP)
+        .order_by("session_start_at")[:15]
+    )
+
+    makeup_sessions = list(
+        base_qs.filter(session_type=AttendanceSession.TYPE_MAKEUP)
+        .filter(Q(session_end_at__gt=now_dt) | Q(session_end_at__isnull=True, session_start_at__gt=now_dt))
+        .order_by("session_start_at")[:15]
+    )
+
+    recent_sessions = list(base_qs.order_by("-created_at")[:20])
+
+    return render(
+        request,
+        "attendance/attendance_home.html",
+        {
+            "faculty": faculty,
+            "now_dt": now_dt,
+            "pending_sessions": pending_sessions,
+            "upcoming_sessions": upcoming_sessions,
+            "makeup_sessions": makeup_sessions,
+            "sessions": recent_sessions,
+        },
+    )
+
+
+@login_required
+@require_student
+def student_dashboard(request: HttpRequest) -> HttpResponse:
+    student = Student.objects.filter(user=request.user).first()
+    if student is None:
+        messages.error(request, "Student profile not linked. Contact admin.")
+
+    stats = {
+        "courses_count": 0,
+        "overall_attendance_pct": 0,
+        "below_threshold_courses": 0,
+        "total_sessions": 0,
+        "present": 0,
+        "absent": 0,
+        "taken": 0,
+    }
+    makeup_pending = 0
+    next_session = None
+    recent_notifications = []
+
+    if student is not None:
+        course_ids = _student_course_ids(student)
+        stats = _student_attendance_stats(student=student, course_ids=course_ids)
+
+        now = timezone.now()
+        if course_ids:
+            next_session = (
+                AttendanceSession.objects.select_related("course", "classroom")
+                .filter(course_id__in=course_ids, session_start_at__gte=now)
+                .order_by("session_start_at")
+                .first()
+            )
+
+            makeup_qs = AttendanceSession.objects.filter(
+                course_id__in=course_ids,
+                session_type=AttendanceSession.TYPE_MAKEUP,
+            )
+            makeup_qs = makeup_qs.filter(
+                Q(remedial_expires_at__isnull=True) | Q(remedial_expires_at__gte=now)
+            )
+            makeup_qs = makeup_qs.exclude(
+                attendancerecord__student=student,
+            )
+            makeup_pending = int(makeup_qs.count())
+
+        recent_notifications = list(
+            Notification.objects.filter(recipient_student=student)
+            .order_by("-created_at")[:6]
+        )
+
+    return render(
+        request,
+        "attendance/student_dashboard.html",
+        {
+            "student": student,
+            "courses_count": stats.get("courses_count", 0),
+            "overall_attendance_pct": stats.get("overall_attendance_pct", 0),
+            "below_threshold_courses": stats.get("below_threshold_courses", 0),
+            "present": stats.get("present", 0),
+            "absent": stats.get("absent", 0),
+            "pending": stats.get("pending", 0),
+            "makeup_pending": makeup_pending,
+            "next_session": next_session,
+            "recent_notifications": recent_notifications,
+        },
+    )
+
+
+@login_required
+@require_student
+def student_live_stats(request: HttpRequest) -> JsonResponse:
+    student = Student.objects.filter(user=request.user).first()
+    if student is None:
+        return JsonResponse({"ok": False, "error": "Student profile not linked."}, status=400)
+
+    course_ids = _student_course_ids(student)
+    stats = _student_attendance_stats(student=student, course_ids=course_ids)
+
+    now = timezone.now()
+    next_session = None
+    if course_ids:
+        next_session = (
+            AttendanceSession.objects.select_related("course", "classroom")
+            .filter(course_id__in=course_ids, session_start_at__gte=now)
+            .order_by("session_start_at")
+            .first()
+        )
+
+    makeup_pending = 0
+    if course_ids:
+        makeup_qs = AttendanceSession.objects.filter(
+            course_id__in=course_ids,
+            session_type=AttendanceSession.TYPE_MAKEUP,
+        )
+        makeup_qs = makeup_qs.filter(
+            Q(remedial_expires_at__isnull=True) | Q(remedial_expires_at__gte=now)
+        )
+        makeup_qs = makeup_qs.exclude(attendancerecord__student=student)
+        makeup_pending = int(makeup_qs.count())
+
+    notifs = list(
+        Notification.objects.filter(recipient_student=student)
+        .order_by("-created_at")[:6]
+    )
+    notif_payload = [
+        {
+            "id": int(n.id),
+            "message": str(n.message or ""),
+            "ago": _format_ago(getattr(n, "created_at", now)),
+        }
+        for n in notifs
+    ]
+
+    next_payload = None
+    if next_session is not None:
+        try:
+            start_label = timezone.localtime(next_session.session_start_at).strftime("%I:%M %p").lstrip("0")
+        except Exception:
+            start_label = "-"
+        room = "-"
+        try:
+            if getattr(next_session, "classroom", None) is not None:
+                room = str(getattr(next_session.classroom, "room_number", "-") or "-")
+        except Exception:
+            room = "-"
+        next_payload = {
+            "course": str(getattr(getattr(next_session, "course", None), "code", "") or ""),
+            "time": start_label,
+            "room": room,
+        }
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "courses_count": int(stats.get("courses_count", 0)),
+            "overall_attendance_pct": int(stats.get("overall_attendance_pct", 0)),
+            "below_threshold_courses": int(stats.get("below_threshold_courses", 0)),
+            "present": int(stats.get("present", 0)),
+            "absent": int(stats.get("absent", 0)),
+            "total_sessions": int(stats.get("total_sessions", 0)),
+            "taken": int(stats.get("taken", 0)),
+            "pending": int(stats.get("pending", 0)),
+            "makeup_pending": int(makeup_pending),
+            "next_session": next_payload,
+            "notifications": notif_payload,
+        }
+    )
+
+
+@login_required
+@require_student
+def student_attendance_details(request: HttpRequest) -> HttpResponse:
+    student = Student.objects.filter(user=request.user).first()
+    if student is None:
+        messages.error(request, "Student profile not linked. Contact admin.")
+        return redirect("student_dashboard")
+
+    course_ids = _student_course_ids(student)
+    stats = _student_attendance_stats(student=student, course_ids=course_ids)
+
+    taken = int(stats.get("taken", 0) or 0)
+    present = int(stats.get("present", 0) or 0)
+    total = int(stats.get("total_sessions", 0) or 0)
+    absent = int(stats.get("absent", 0) or 0)
+    pending = max(int(total) - (int(present) + int(absent)), 0)
+
+    present_deg = int(round((float(present) / float(total)) * 360.0)) if total > 0 else 0
+    absent_deg = int(round((float(absent) / float(total)) * 360.0)) if total > 0 else 0
+    pending_deg = max(360 - present_deg - absent_deg, 0) if total > 0 else 0
+
+    per_course: list[dict[str, object]] = []
+    threshold = 75
+    now = timezone.now()
+    session_types = [AttendanceSession.TYPE_REGULAR, AttendanceSession.TYPE_MAKEUP]
+    for cid in course_ids:
+        c = Course.objects.filter(id=cid).first()
+        total_c = AttendanceSession.objects.filter(
+            course_id=cid,
+            session_type__in=session_types,
+            session_start_at__lte=now,
+        ).count()
+        present_c = AttendanceRecord.objects.filter(
+            student=student,
+            session__course_id=cid,
+            session__session_type__in=session_types,
+            session__session_start_at__lte=now,
+            status=AttendanceRecord.STATUS_PRESENT,
+        ).count()
+        absent_c = AttendanceRecord.objects.filter(
+            student=student,
+            session__course_id=cid,
+            session__session_type__in=session_types,
+            session__session_start_at__lte=now,
+            status=AttendanceRecord.STATUS_ABSENT,
+        ).count()
+        taken_c = int(present_c) + int(absent_c)
+        denom_c = int(total_c)
+        pct_c = int(round((int(present_c) / float(denom_c)) * 100.0)) if denom_c > 0 else 0
+        per_course.append(
+            {
+                "course": c,
+                "total": int(total_c),
+                "present": int(present_c),
+                "absent": int(absent_c),
+                "taken": int(taken_c),
+                "pct": int(pct_c),
+                "below": bool(int(pct_c) < int(threshold)),
+            }
+        )
+
+    return render(
+        request,
+        "attendance/student_attendance_details.html",
+        {
+            "student": student,
+            "stats": stats,
+            "present_deg": present_deg,
+            "absent_deg": absent_deg,
+            "pending_deg": pending_deg,
+            "pending": pending,
+            "threshold": threshold,
+            "per_course": per_course,
+        },
+    )
+
+
+@login_required
+@require_student
+def student_courses(request: HttpRequest) -> HttpResponse:
+    student = Student.objects.filter(user=request.user).first()
+    if student is None:
+        messages.error(request, "Student profile not linked. Contact admin.")
+        return redirect("student_dashboard")
+
+    now = timezone.now()
+    session_types = [AttendanceSession.TYPE_REGULAR, AttendanceSession.TYPE_MAKEUP]
+
+    enrollments = (
+        Enrollment.objects.filter(student=student)
+        .select_related("course", "course__faculty", "course__classroom")
+        .order_by("course__code")
+    )
+
+    rows: list[dict[str, object]] = []
+    for e in enrollments:
+        c = getattr(e, "course", None)
+        if c is None:
+            continue
+
+        total_sessions = AttendanceSession.objects.filter(
+            course=c,
+            session_type__in=session_types,
+            session_start_at__lte=now,
+        ).count()
+        present = AttendanceRecord.objects.filter(
+            student=student,
+            session__course=c,
+            session__session_type__in=session_types,
+            session__session_start_at__lte=now,
+            status=AttendanceRecord.STATUS_PRESENT,
+        ).count()
+        absent = AttendanceRecord.objects.filter(
+            student=student,
+            session__course=c,
+            session__session_type__in=session_types,
+            session__session_start_at__lte=now,
+            status=AttendanceRecord.STATUS_ABSENT,
+        ).count()
+        taken = int(present) + int(absent)
+        pending = max(int(total_sessions) - int(taken), 0)
+        pct = int(round((int(present) / float(total_sessions)) * 100.0)) if int(total_sessions) > 0 else 0
+
+        rows.append(
+            {
+                "course": c,
+                "total_sessions": int(total_sessions),
+                "present": int(present),
+                "absent": int(absent),
+                "pending": int(pending),
+                "pct": int(pct),
+            }
+        )
+
+    return render(
+        request,
+        "attendance/student_courses.html",
+        {
+            "student": student,
+            "rows": rows,
+        },
+    )
+
+
+@login_required
+@require_student
+def student_makeup_sessions(request: HttpRequest) -> HttpResponse:
+    student = Student.objects.filter(user=request.user).first()
+    if student is None:
+        messages.error(request, "Student profile not linked. Contact admin.")
+        return redirect("student_dashboard")
+
+    now = timezone.now()
+
+    sessions_qs = (
+        AttendanceSession.objects.select_related("course", "classroom", "classroom__block")
+        .filter(
+            session_type=AttendanceSession.TYPE_MAKEUP,
+            course__enrollments__student=student,
+        )
+        .order_by("-session_start_at")
+        .distinct()
+    )
+
+    rows: list[dict[str, object]] = []
+    for s in sessions_qs[:50]:
+        start_at = getattr(s, "session_start_at", None)
+        end_at = getattr(s, "session_end_at", None)
+        expires_at = getattr(s, "remedial_expires_at", None)
+        cutoff = None
+        if end_at and expires_at:
+            cutoff = min(end_at, expires_at)
+        elif end_at:
+            cutoff = end_at
+        elif expires_at:
+            cutoff = expires_at
+
+        is_upcoming = bool(start_at and now < start_at)
+        is_active = bool(start_at and cutoff and start_at <= now <= cutoff)
+        is_expired = bool(cutoff and now > cutoff)
+
+        marked = AttendanceRecord.objects.filter(session=s, student=student).exists()
+
+        rows.append(
+            {
+                "session": s,
+                "start_at": start_at,
+                "end_at": end_at,
+                "cutoff": cutoff,
+                "is_upcoming": is_upcoming,
+                "is_active": is_active,
+                "is_expired": is_expired,
+                "marked": bool(marked),
+            }
+        )
+
+    pending_count = sum((1 for r in rows if not r.get("marked") and not r.get("is_expired")), 0)
+
+    return render(
+        request,
+        "attendance/student_makeup_sessions.html",
+        {
+            "student": student,
+            "rows": rows,
+            "pending_count": int(pending_count),
+        },
+    )
 
 
 @login_required
@@ -220,6 +803,7 @@ def faculty_dashboard(request: HttpRequest) -> HttpResponse:
 
     courses = list(qs)
 
+    now_dt = timezone.now()
     today = timezone.localdate()
     week_start = today - timezone.timedelta(days=today.weekday())
 
@@ -299,6 +883,44 @@ def faculty_dashboard(request: HttpRequest) -> HttpResponse:
             + ("..." if len(missing_face_courses) > 5 else "")
         )
 
+    # Faculty workload distribution (based on assigned courses weekly_hours)
+    faculty_rows = list(
+        Faculty.objects.annotate(
+            assigned_hours=Coalesce(Sum("course__weekly_hours"), 0),
+        ).order_by("name")
+    )
+    faculty_workloads: list[dict[str, object]] = []
+    counts = {"overloaded": 0, "balanced": 0, "underloaded": 0, "unassigned": 0}
+    for fobj in faculty_rows:
+        assigned = int(getattr(fobj, "assigned_hours", 0) or 0)
+        max_hours = int(getattr(fobj, "max_workload_hours", 0) or 0)
+        if assigned <= 0:
+            status = "Unassigned"
+            counts["unassigned"] += 1
+        elif max_hours > 0 and assigned > max_hours:
+            status = "Overloaded"
+            counts["overloaded"] += 1
+        elif max_hours > 0 and assigned == max_hours:
+            status = "Balanced"
+            counts["balanced"] += 1
+        else:
+            status = "Underloaded"
+            counts["underloaded"] += 1
+
+        utilization_pct = round((assigned * 100.0 / max_hours), 1) if max_hours > 0 else None
+        faculty_workloads.append(
+            {
+                "id": fobj.id,
+                "name": fobj.name,
+                "department": fobj.department,
+                "email": fobj.email,
+                "assigned_hours": assigned,
+                "max_hours": max_hours,
+                "utilization_pct": utilization_pct,
+                "status": status,
+            }
+        )
+
     return render(
         request,
         "attendance/faculty_dashboard.html",
@@ -306,6 +928,7 @@ def faculty_dashboard(request: HttpRequest) -> HttpResponse:
             "faculty": faculty,
             "courses": courses,
             "recent_sessions": recent_sessions,
+            "now_dt": now_dt,
             "today": today,
             "stats": {
                 "sessions_week": sessions_week,
@@ -314,6 +937,8 @@ def faculty_dashboard(request: HttpRequest) -> HttpResponse:
                 "avg_attendance_pct": avg_attendance_pct,
             },
             "alerts": alerts,
+            "faculty_workloads": faculty_workloads,
+            "faculty_workload_counts": counts,
         },
     )
 
@@ -462,90 +1087,11 @@ def manage_dashboard(request: HttpRequest) -> HttpResponse:
         "records": AttendanceRecord.objects.count(),
     }
 
-    # Capacity utilization (based on attendance records captured in sessions)
-    classroom_utilization = list(
-        AttendanceSession.objects.filter(classroom__isnull=False, classroom__capacity__gt=0)
-        .values(
-            "classroom_id",
-            "classroom__room_number",
-            "classroom__block__name",
-            "classroom__capacity",
-        )
-        .annotate(
-            sessions_count=Count("id"),
-            records_count=Count("attendancerecord"),
-        )
-        .annotate(
-            utilization_pct=(
-                100.0
-                * F("records_count")
-                / (F("sessions_count") * F("classroom__capacity"))
-            )
-        )
-        .order_by("-utilization_pct")[:10]
-    )
-
-    block_utilization = list(
-        AttendanceSession.objects.filter(classroom__isnull=False, classroom__capacity__gt=0)
-        .values("classroom__block__name")
-        .annotate(
-            sessions_count=Count("id"),
-            records_count=Count("attendancerecord"),
-            seats_offered=Sum("classroom__capacity"),
-        )
-        .annotate(
-            utilization_pct=(100.0 * F("records_count") / Coalesce(F("seats_offered"), 1))
-        )
-        .order_by("-utilization_pct")[:10]
-    )
-
-    # Faculty workload distribution (based on assigned courses weekly_hours)
-    faculty_rows = list(
-        Faculty.objects.annotate(
-            assigned_hours=Coalesce(Sum("course__weekly_hours"), 0),
-        ).order_by("name")
-    )
-    faculty_workloads: list[dict[str, object]] = []
-    counts = {"overloaded": 0, "balanced": 0, "underloaded": 0, "unassigned": 0}
-    for fobj in faculty_rows:
-        assigned = int(getattr(fobj, "assigned_hours", 0) or 0)
-        max_hours = int(getattr(fobj, "max_workload_hours", 0) or 0)
-        if assigned <= 0:
-            status = "Unassigned"
-            counts["unassigned"] += 1
-        elif max_hours > 0 and assigned > max_hours:
-            status = "Overloaded"
-            counts["overloaded"] += 1
-        elif max_hours > 0 and assigned == max_hours:
-            status = "Balanced"
-            counts["balanced"] += 1
-        else:
-            status = "Underloaded"
-            counts["underloaded"] += 1
-
-        utilization_pct = round((assigned * 100.0 / max_hours), 1) if max_hours > 0 else None
-        faculty_workloads.append(
-            {
-                "id": fobj.id,
-                "name": fobj.name,
-                "department": fobj.department,
-                "email": fobj.email,
-                "assigned_hours": assigned,
-                "max_hours": max_hours,
-                "utilization_pct": utilization_pct,
-                "status": status,
-            }
-        )
-
     return render(
         request,
         "attendance/manage/dashboard.html",
         {
             "stats": stats,
-            "classroom_utilization": classroom_utilization,
-            "block_utilization": block_utilization,
-            "faculty_workloads": faculty_workloads,
-            "faculty_workload_counts": counts,
         },
     )
 
@@ -965,6 +1511,237 @@ def create_session(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@require_teacher
+def create_makeup_session(request: HttpRequest) -> HttpResponse:
+    user = getattr(request, "user", None)
+    email = (getattr(user, "email", "") or "").strip().lower()
+    faculty = Faculty.objects.filter(email__iexact=email).first() if email else None
+    allowed_courses = Course.objects.order_by("code")
+    if faculty is not None:
+        allowed_courses = allowed_courses.filter(faculty=faculty)
+
+    if request.method == "POST":
+        form = MakeupSessionCreateForm(request.POST)
+        if "course" in form.fields:
+            form.fields["course"].queryset = allowed_courses
+        if form.is_valid():
+            session = form.save(commit=False)
+            session.session_type = AttendanceSession.TYPE_MAKEUP
+            session.remedial_code = _unique_remedial_code()
+            session.remedial_expires_at = session.session_end_at
+            session.save()
+
+            if bool(form.cleaned_data.get("notify_students")):
+                enrolled_students = list(
+                    Student.objects.filter(course_enrollments__course=session.course)
+                    .order_by("id")
+                    .distinct()
+                )
+                expiry_str = (
+                    timezone.localtime(session.remedial_expires_at).strftime("%Y-%m-%d %H:%M")
+                    if session.remedial_expires_at
+                    else "-"
+                )
+                msg = (
+                    f"Make-Up Class: {session.course.code} ({session.course.name}). "
+                    f"Remedial Code: {session.remedial_code}. Expires: {expiry_str}. "
+                    "Login → Remedial Code to mark attendance."
+                )
+                Notification.objects.bulk_create(
+                    [
+                        Notification(recipient_student=s, channel="simulated", message=msg)
+                        for s in enrolled_students
+                    ],
+                    ignore_conflicts=False,
+                )
+            messages.success(request, "Make-up session created. Share the remedial code with students.")
+            return redirect("makeup_session_code", session_id=session.id)
+    else:
+        now = timezone.localtime(timezone.now()).replace(second=0, microsecond=0) + timezone.timedelta(minutes=1)
+        initial: dict[str, object] = {"session_date": now.date(), "start_time": now.time()}
+        course_id = request.GET.get("course")
+        if course_id and course_id.isdigit():
+            initial["course"] = int(course_id)
+        form = MakeupSessionCreateForm(initial=initial)
+        if "course" in form.fields:
+            form.fields["course"].queryset = allowed_courses
+
+    return render(request, "attendance/create_makeup_session.html", {"form": form})
+
+
+@login_required
+@require_teacher
+def classroom_busy_check(request: HttpRequest) -> JsonResponse:
+    classroom_id = request.GET.get("classroom")
+    date = request.GET.get("date")
+    start_time = request.GET.get("start")
+    end_time = request.GET.get("end")
+
+    if not (classroom_id and classroom_id.isdigit() and date and start_time and end_time):
+        return JsonResponse({"ok": False, "busy": False, "message": ""})
+
+    classroom = Classroom.objects.select_related("block").filter(pk=int(classroom_id)).first()
+    if classroom is None:
+        return JsonResponse({"ok": False, "busy": False, "message": ""})
+
+    try:
+        tz = timezone.get_current_timezone()
+        start_dt = timezone.make_aware(datetime.fromisoformat(f"{date}T{start_time}"), tz)
+        end_dt = timezone.make_aware(datetime.fromisoformat(f"{date}T{end_time}"), tz)
+    except Exception:
+        return JsonResponse({"ok": False, "busy": False, "message": ""})
+
+    if end_dt <= start_dt:
+        return JsonResponse({"ok": True, "busy": True, "message": "End time must be after start time."})
+
+    overlaps = AttendanceSession.objects.filter(
+        classroom=classroom,
+        session_start_at__lt=end_dt,
+    ).filter(
+        Q(session_end_at__gt=start_dt) | Q(session_end_at__isnull=True, session_start_at__gt=start_dt)
+    )
+
+    if overlaps.exists():
+        return JsonResponse(
+            {
+                "ok": True,
+                "busy": True,
+                "message": "Busy (already booked by some other faculty).",
+            }
+        )
+    return JsonResponse({"ok": True, "busy": False, "message": "Available"})
+
+
+@login_required
+@require_teacher
+def available_classrooms(request: HttpRequest) -> JsonResponse:
+    date = request.GET.get("date")
+    start_time = request.GET.get("start")
+    end_time = request.GET.get("end")
+
+    if not (date and start_time and end_time):
+        return JsonResponse({"ok": False, "items": []})
+
+    try:
+        tz = timezone.get_current_timezone()
+        start_dt = timezone.make_aware(datetime.fromisoformat(f"{date}T{start_time}"), tz)
+        end_dt = timezone.make_aware(datetime.fromisoformat(f"{date}T{end_time}"), tz)
+    except Exception:
+        return JsonResponse({"ok": False, "items": []})
+
+    if end_dt <= start_dt:
+        return JsonResponse({"ok": True, "items": []})
+
+    overlaps = (
+        AttendanceSession.objects.filter(
+            classroom__isnull=False,
+            session_start_at__lt=end_dt,
+        )
+        .filter(Q(session_end_at__gt=start_dt) | Q(session_end_at__isnull=True))
+        .values_list("classroom_id", flat=True)
+        .distinct()
+    )
+    busy_ids = list(overlaps)
+
+    qs = Classroom.objects.select_related("block").order_by("block__name", "room_number")
+    if busy_ids:
+        qs = qs.exclude(id__in=busy_ids)
+
+    items = [
+        {
+            "id": int(c.id),
+            "label": f"{getattr(getattr(c, 'block', None), 'name', '')} - {getattr(c, 'room_number', '')}".strip(
+                " -"
+            ),
+        }
+        for c in qs[:12]
+    ]
+    return JsonResponse({"ok": True, "items": items})
+
+
+@login_required
+@require_teacher
+def makeup_session_code(request: HttpRequest, session_id: int) -> HttpResponse:
+    session = get_object_or_404(AttendanceSession.objects.select_related("course"), id=session_id)
+    return render(request, "attendance/makeup_session_code.html", {"session": session})
+
+
+@login_required
+@require_student
+@transaction.atomic
+def remedial_code_entry(request: HttpRequest) -> HttpResponse:
+    student = Student.objects.filter(user=request.user).first()
+    if student is None:
+        messages.error(request, "Student profile not linked. Contact admin.")
+        return redirect("home")
+
+    if request.method == "POST":
+        form = RemedialCodeEntryForm(request.POST)
+        if form.is_valid():
+            code = (form.cleaned_data.get("code") or "").strip().upper()
+            session = (
+                AttendanceSession.objects.select_related("course")
+                .filter(session_type=AttendanceSession.TYPE_MAKEUP, remedial_code=code)
+                .first()
+            )
+            if session is None:
+                messages.error(request, "Invalid remedial code.")
+                return render(request, "attendance/remedial_code_entry.html", {"form": form})
+
+            now = timezone.now()
+            start_at = getattr(session, "session_start_at", None)
+            end_at = getattr(session, "session_end_at", None)
+            expires_at = getattr(session, "remedial_expires_at", None)
+
+            if start_at is None or end_at is None:
+                messages.error(
+                    request,
+                    "This make-up session is not configured with a valid class time window. Contact faculty.",
+                )
+                return render(request, "attendance/remedial_code_entry.html", {"form": form})
+
+            if start_at and now < start_at:
+                messages.error(request, "This make-up session is not active yet. Try again during class time.")
+                return render(request, "attendance/remedial_code_entry.html", {"form": form})
+
+            cutoff = min(end_at, expires_at) if expires_at else end_at
+
+            if now > cutoff:
+                messages.error(request, "This make-up session has ended. Remedial code is expired.")
+                return render(request, "attendance/remedial_code_entry.html", {"form": form})
+
+            if not Enrollment.objects.filter(student=student, course=session.course).exists():
+                messages.error(request, "You are not enrolled in this course.")
+                return render(request, "attendance/remedial_code_entry.html", {"form": form})
+
+            existing = AttendanceRecord.objects.filter(session=session, student=student).first()
+            if existing is not None:
+                messages.success(request, "Attendance already marked for this make-up session.")
+                return render(
+                    request,
+                    "attendance/remedial_code_entry.html",
+                    {"form": RemedialCodeEntryForm(), "last_session": session},
+                )
+
+            AttendanceRecord.objects.create(
+                session=session,
+                student=student,
+                status=AttendanceRecord.STATUS_PRESENT,
+                source="remedial_code",
+            )
+            messages.success(request, f"Attendance marked for {session.course.code}.")
+            return render(
+                request,
+                "attendance/remedial_code_entry.html",
+                {"form": RemedialCodeEntryForm(), "last_session": session},
+            )
+    else:
+        form = RemedialCodeEntryForm()
+
+    return render(request, "attendance/remedial_code_entry.html", {"form": form})
+
+
+@login_required
 def mark_attendance_choice(request: HttpRequest, session_id: int) -> HttpResponse:
     session = get_object_or_404(AttendanceSession.objects.select_related("course", "subject", "classroom"), id=session_id)
     students = (
@@ -1056,6 +1833,9 @@ def session_mark_summary(request: HttpRequest, session_id: int) -> HttpResponse:
 @login_required
 def edit_session(request: HttpRequest, session_id: int) -> HttpResponse:
     session = get_object_or_404(AttendanceSession.objects.select_related("course"), id=session_id)
+    if session.session_type == AttendanceSession.TYPE_MAKEUP and timezone.now() >= session.session_start_at:
+        messages.error(request, "This make-up session is locked and cannot be edited.")
+        return redirect("session_history", session_id=session.id)
     if request.method == "POST":
         form = AttendanceSessionCreateForm(request.POST, instance=session)
         if form.is_valid():
@@ -1115,6 +1895,14 @@ def session_history(request: HttpRequest, session_id: int) -> HttpResponse:
         else:
             absent_rows.append({"student": s, "status": rec.status, "source": rec.source})
 
+    participation_pct = None
+    low_participation = False
+    if session.session_type == AttendanceSession.TYPE_MAKEUP:
+        total = len(students)
+        present = len(present_rows)
+        participation_pct = round((present * 100.0 / total), 1) if total > 0 else 0.0
+        low_participation = bool(total > 0 and participation_pct < 60.0)
+
     return render(
         request,
         "attendance/session_history.html",
@@ -1124,6 +1912,8 @@ def session_history(request: HttpRequest, session_id: int) -> HttpResponse:
             "absent_rows": absent_rows,
             "unmarked_rows": unmarked_rows,
             "is_completed": bool(len(students) > 0 and (len(present_rows) + len(absent_rows)) >= len(students)),
+            "participation_pct": participation_pct,
+            "low_participation": low_participation,
             "counts": {
                 "total": len(students),
                 "present": len(present_rows),
@@ -1260,38 +2050,57 @@ def mark_attendance_by_photo(request: HttpRequest, session_id: int) -> HttpRespo
         )
         return redirect("session_face", session_id=session.id)
 
+    newly_marked = 0
     for s in students:
         status = (
             AttendanceRecord.STATUS_PRESENT
             if s.id in present_ids
             else AttendanceRecord.STATUS_ABSENT
         )
-        AttendanceRecord.objects.update_or_create(
+        obj, created = AttendanceRecord.objects.update_or_create(
             session=session,
             student=s,
             defaults={"status": status, "source": "face"},
         )
+        if created or obj.status != status:
+            newly_marked += 1
 
     absentees = [s for s in students if s.id not in present_ids]
     email_failures: list[str] = []
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "") or getattr(settings, "EMAIL_HOST_USER", "")
+    email_enabled = bool((from_email or "").strip())
     for s in absentees:
         msg = (
             f"Absent detected: {s.full_name} ({s.roll_no}) was marked ABSENT for "
             f"{session.course.code} on {session.session_date}."
         )
         Notification.objects.create(recipient_student=s, channel="simulated", message=msg)
-        ok, reason = _send_absent_email(student=s, session=session)
-        if not ok:
-            email_failures.append(f"{s.roll_no}: {reason}")
+        if email_enabled:
+            ok, reason = _send_absent_email(student=s, session=session)
+            if not ok:
+                email_failures.append(f"{s.roll_no}: {reason}")
 
-    messages.success(
-        request,
-        f"Photo-based marking complete. Detected present: {len(present_ids)} | Absentees: {len(absentees)}",
-    )
+    msg = f"Photo-based marking complete. Detected present: {len(present_ids)} | Absentees: {len(absentees)}"
+    messages.success(request, msg)
     if email_failures:
         preview = "; ".join(email_failures[:3])
         extra = "" if len(email_failures) <= 3 else f" (+{len(email_failures) - 3} more)"
         messages.warning(request, f"Absent emails not sent for {len(email_failures)} student(s): {preview}{extra}")
+
+    wants_json = request.headers.get("x-requested-with") == "XMLHttpRequest"
+    if wants_json:
+        counts = _session_counts(session=session)
+        return JsonResponse(
+            {
+                "ok": True,
+                "newly_marked": int(newly_marked),
+                "present_detected": int(len(present_ids)),
+                "absentees": int(len(absentees)),
+                "counts": counts,
+                "message": msg,
+            }
+        )
+
     return redirect("session_mark_summary", session_id=session.id)
 
 
@@ -1338,15 +2147,18 @@ def mark_attendance(request: HttpRequest, session_id: int) -> HttpResponse:
     # Absentee detection + notifications (simulated)
     absentees = [s for s in students if s.id not in present_ids]
     email_failures: list[str] = []
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "") or getattr(settings, "EMAIL_HOST_USER", "")
+    email_enabled = bool((from_email or "").strip())
     for s in absentees:
         msg = (
             f"Absent detected: {s.full_name} ({s.roll_no}) was marked ABSENT for "
             f"{session.course.code} on {session.session_date}."
         )
         Notification.objects.create(recipient_student=s, channel="simulated", message=msg)
-        ok, reason = _send_absent_email(student=s, session=session)
-        if not ok:
-            email_failures.append(f"{s.roll_no}: {reason}")
+        if email_enabled:
+            ok, reason = _send_absent_email(student=s, session=session)
+            if not ok:
+                email_failures.append(f"{s.roll_no}: {reason}")
 
     messages.success(request, f"Attendance saved. Absentees: {len(absentees)}")
     if email_failures:

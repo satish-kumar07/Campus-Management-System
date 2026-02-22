@@ -6,7 +6,7 @@
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
       <div>
         <div class="display-6 mb-1">Attendance</div>
-        <div class="smart-muted">Create sessions, view recent sessions, and mark attendance.</div>
+        <div class="smart-muted">Pending attendance, upcoming schedule, and make-up sessions.</div>
       </div>
       <div>
         <a class="btn btn-open" href="{% url 'create_session' %}">Create Session</a>
@@ -14,10 +14,145 @@
     </div>
   </div>
 
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-xl-6">
+      <div class="attendance-card glass-strong p-3 p-md-4 h-100">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <div class="fw-semibold">Pending to Mark</div>
+          <div class="smart-muted small">Sessions started but not fully marked</div>
+        </div>
+
+        {% if pending_sessions %}
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 table-clean">
+              <thead>
+                <tr>
+                  <th>Course</th>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th class="text-end">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in pending_sessions %}
+                  <tr>
+                    <td class="fw-semibold">{{ s.course.code }}</td>
+                    <td>{{ s.session_start_at|date:"Y-m-d" }}</td>
+                    <td class="smart-muted">{{ s.session_start_at|date:"H:i" }}</td>
+                    <td class="text-end">
+                      <div class="d-inline-flex gap-2">
+                        <a class="btn btn-open btn-sm" href="{% url 'mark_attendance_choice' session_id=s.id %}">Mark</a>
+                        <a class="btn btn-soft-blue btn-sm" href="{% url 'session_history' session_id=s.id %}">View</a>
+                        {% if s.session_type == 'makeup' %}
+                          <a class="btn btn-mini btn-sm" href="{% url 'makeup_session_code' session_id=s.id %}">Code</a>
+                        {% endif %}
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="smart-muted">No pending sessions right now.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-6">
+      <div class="attendance-card glass-strong p-3 p-md-4 h-100">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <div class="fw-semibold">Upcoming Classes</div>
+          <div class="smart-muted small">Next scheduled sessions</div>
+        </div>
+
+        {% if upcoming_sessions %}
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 table-clean">
+              <thead>
+                <tr>
+                  <th>Course</th>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th class="text-end">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in upcoming_sessions %}
+                  <tr>
+                    <td class="fw-semibold">{{ s.course.code }}</td>
+                    <td>{{ s.session_start_at|date:"Y-m-d" }}</td>
+                    <td class="smart-muted">{{ s.session_start_at|date:"H:i" }}</td>
+                    <td class="text-end"><span class="badge text-bg-light border">Upcoming</span></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="smart-muted">No upcoming regular sessions.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="attendance-card glass-strong p-3 p-md-4 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <div class="fw-semibold">Make-Up Sessions</div>
+      <div class="smart-muted small">Upcoming or active make-up sessions</div>
+    </div>
+
+    {% if makeup_sessions %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 table-clean">
+          <thead>
+            <tr>
+              <th>Course</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Code</th>
+              <th class="text-end">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in makeup_sessions %}
+              <tr>
+                <td class="fw-semibold">{{ s.course.code }}</td>
+                <td>{{ s.session_start_at|date:"Y-m-d" }}</td>
+                <td class="smart-muted">{{ s.session_start_at|date:"H:i" }}</td>
+                <td class="smart-muted" style="letter-spacing:0.1em;">{{ s.remedial_code }}</td>
+                <td class="text-end">
+                  <div class="d-inline-flex gap-2">
+                    <a class="btn btn-soft-blue btn-sm" href="{% url 'session_history' session_id=s.id %}">View</a>
+                    <a class="btn btn-mini btn-sm" href="{% url 'makeup_session_code' session_id=s.id %}">Details</a>
+                    {% if not s.is_completed %}
+                      <a class="btn btn-open btn-sm" href="{% url 'mark_attendance_choice' session_id=s.id %}">Mark</a>
+                    {% else %}
+                      <span class="badge text-bg-success align-self-center">Completed</span>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="smart-muted">No make-up sessions scheduled.</div>
+    {% endif %}
+  </div>
+
   <div class="attendance-card glass-strong p-3 p-md-4">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
       <div class="fw-semibold">Recent Sessions</div>
       <div class="d-flex align-items-center gap-2">
+        <div class="d-flex flex-wrap gap-2" id="statusFilters">
+          <button type="button" class="btn btn-mini btn-sm" data-filter="all">All</button>
+          <button type="button" class="btn btn-mini btn-sm" data-filter="pending">Pending</button>
+          <button type="button" class="btn btn-mini btn-sm" data-filter="completed">Completed</button>
+          <button type="button" class="btn btn-mini btn-sm" data-filter="upcoming">Upcoming</button>
+          <button type="button" class="btn btn-mini btn-sm" data-filter="makeup">Make-Up</button>
+        </div>
         <div class="search-pill">
           <span class="search-ico">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -45,7 +180,11 @@
           </thead>
           <tbody id="sessionsTbody">
             {% for s in sessions %}
-              <tr class="session-row" data-search="{{ s.course.code }} {{ s.course.name }} {{ s.session_start_at|date:'Y-m-d' }} {{ s.session_start_at|date:'H:i' }}">
+              <tr class="session-row"
+                  data-search="{{ s.course.code }} {{ s.course.name }} {{ s.session_start_at|date:'Y-m-d' }} {{ s.session_start_at|date:'H:i' }}"
+                  data-status="{% if s.is_completed %}completed{% else %}pending{% endif %}"
+                  data-upcoming="{% if now_dt and s.session_start_at and s.session_start_at > now_dt %}1{% else %}0{% endif %}"
+                  data-type="{% if s.session_type == 'makeup' %}makeup{% else %}regular{% endif %}">
                 <td class="fw-semibold">{{ s.course.code }}</td>
                 <td class="smart-muted">{{ s.course.name }}</td>
                 <td>{{ s.session_start_at|date:"Y-m-d" }}</td>
@@ -81,13 +220,48 @@
       const input = document.getElementById('sessionSearch');
       if (!input) return;
       const rows = Array.from(document.querySelectorAll('.session-row'));
-      input.addEventListener('input', function () {
+
+      const filterWrap = document.getElementById('statusFilters');
+      const filterBtns = filterWrap ? Array.from(filterWrap.querySelectorAll('button[data-filter]')) : [];
+      let activeFilter = 'all';
+
+      function setActiveFilter(next) {
+        activeFilter = next || 'all';
+        filterBtns.forEach((b) => {
+          const isActive = (b.getAttribute('data-filter') || 'all') === activeFilter;
+          b.classList.toggle('btn-open', isActive);
+          b.classList.toggle('btn-mini', !isActive);
+        });
+        apply();
+      }
+
+      function matchesFilter(row) {
+        if (activeFilter === 'all') return true;
+        if (activeFilter === 'upcoming') return (row.getAttribute('data-upcoming') || '0') === '1';
+        if (activeFilter === 'makeup') return (row.getAttribute('data-type') || '') === 'makeup';
+        return (row.getAttribute('data-status') || '') === activeFilter;
+      }
+
+      function apply() {
         const q = (input.value || '').toLowerCase().trim();
         rows.forEach(function (row) {
           const hay = (row.getAttribute('data-search') || '').toLowerCase();
-          row.style.display = hay.indexOf(q) !== -1 ? '' : 'none';
+          const okSearch = hay.indexOf(q) !== -1;
+          const okFilter = matchesFilter(row);
+          row.style.display = okSearch && okFilter ? '' : 'none';
         });
-      });
+      }
+
+      if (filterBtns.length) {
+        filterBtns.forEach((btn) => {
+          btn.addEventListener('click', function () {
+            setActiveFilter(btn.getAttribute('data-filter') || 'all');
+          });
+        });
+        setActiveFilter('all');
+      }
+
+      input.addEventListener('input', apply);
     })();
   </script>
 {% endblock %}

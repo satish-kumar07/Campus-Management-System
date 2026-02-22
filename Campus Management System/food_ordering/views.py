@@ -412,7 +412,7 @@ def select_pickup_slot(request: HttpRequest, stall_id: int) -> HttpResponse:
     today = timezone.localdate()
 
     slots = list(
-        BreakSlot.objects.filter(is_active=True, slot_date__gte=today).order_by("slot_date", "start_time")
+        BreakSlot.objects.filter(is_active=True, slot_date=today).order_by("start_time")
     )
 
     slot_cards: list[dict] = []
@@ -529,6 +529,12 @@ def confirm_pickup_slot(request: HttpRequest, stall_id: int) -> HttpResponse:
         _set_preorder_payload(request, stall.id, payload)
         return redirect("food_select_pickup_slot", stall_id=stall.id)
 
+    if hold.break_slot and hold.break_slot.slot_date != timezone.localdate():
+        messages.error(request, "Pickup slot must be for today. Please select a slot again.")
+        payload.pop("hold_id", None)
+        _set_preorder_payload(request, stall.id, payload)
+        return redirect("food_select_pickup_slot", stall_id=stall.id)
+
     if request.method == "POST":
         with transaction.atomic():
             hold_locked = (
@@ -630,7 +636,7 @@ def vendor_dashboard(request: HttpRequest) -> HttpResponse:
     stalls_from_stall_ops = FoodStall.objects.filter(operators=request.user, is_active=True)
     stalls = (stalls_from_categories | stalls_from_stall_ops).distinct().order_by("name")
     orders = (
-        FoodOrder.objects.select_related("stall")
+        FoodOrder.objects.select_related("stall", "break_slot")
         .prefetch_related("items", "items__menu_item")
         .filter(stall__in=stalls)
         .exclude(status__in=[FoodOrder.STATUS_CANCELLED, FoodOrder.STATUS_COMPLETED])
@@ -703,7 +709,7 @@ def vendor_delivered_orders(request: HttpRequest) -> HttpResponse:
     stalls = (stalls_from_categories | stalls_from_stall_ops).distinct().order_by("name")
 
     orders = (
-        FoodOrder.objects.select_related("stall")
+        FoodOrder.objects.select_related("stall", "break_slot")
         .prefetch_related("items", "items__menu_item")
         .filter(stall__in=stalls, status=FoodOrder.STATUS_COMPLETED)
         .order_by("-updated_at")

@@ -2,15 +2,17 @@
 {% block title %}CMS - Faculty Dashboard{% endblock %}
 
 {% block content %}
+  <div class="container-lg">
   <div class="attendance-hero glass-strong p-4 p-md-5 mb-4">
-    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
       <div>
         <div class="display-6 mb-1">Faculty Dashboard</div>
         <div class="smart-muted">Attendance workspace for faculty.</div>
       </div>
       <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-open" href="{% url 'create_session' %}">Create Session</a>
-        <a class="btn btn-cancel" href="{% url 'attendance_home' %}">Attendance</a>
+        <a class="btn btn-open btn-sm" href="{% url 'create_session' %}">Create Session</a>
+        <a class="btn btn-open btn-sm" href="{% url 'create_makeup_session' %}">Create Make-Up</a>
+        <a class="btn btn-cancel btn-sm" href="{% url 'attendance_home' %}">Attendance</a>
       </div>
     </div>
   </div>
@@ -50,6 +52,7 @@
       <a class="btn btn-soft-blue btn-sm" href="{% url 'manage_face_samples' %}">Manage Face Data</a>
       <a class="btn btn-soft-blue btn-sm" href="{% url 'manage_sessions' %}">View All Sessions</a>
       <a class="btn btn-soft-blue btn-sm" href="{% url 'manage_enrollments' %}">Manage Enrollments</a>
+      <a class="btn btn-soft-blue btn-sm" href="{% url 'create_makeup_session' %}">Create Make-Up Session</a>
     </div>
   </div>
 
@@ -67,7 +70,16 @@
   <div class="attendance-card glass-strong p-3 p-md-4 mb-4">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
       <div class="fw-semibold">Recent Sessions</div>
-      <div class="smart-muted small">Latest 10</div>
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <div class="d-flex flex-wrap gap-2" id="facultyRecentFilters">
+          <button type="button" class="btn btn-mini btn-sm" data-filter="all">All</button>
+          <button type="button" class="btn btn-mini btn-sm" data-filter="pending">Pending</button>
+          <button type="button" class="btn btn-mini btn-sm" data-filter="completed">Completed</button>
+          <button type="button" class="btn btn-mini btn-sm" data-filter="upcoming">Upcoming</button>
+          <button type="button" class="btn btn-mini btn-sm" data-filter="makeup">Make-Up</button>
+        </div>
+        <div class="smart-muted small">Latest 10</div>
+      </div>
     </div>
 
     {% if recent_sessions %}
@@ -85,17 +97,23 @@
           </thead>
           <tbody>
             {% for s in recent_sessions %}
-              <tr>
+              <tr class="faculty-session-row"
+                  data-status="{% if s.is_completed %}completed{% else %}pending{% endif %}"
+                  data-upcoming="{% if now_dt and s.session_start_at and s.session_start_at > now_dt %}1{% else %}0{% endif %}"
+                  data-type="{% if s.session_type == 'makeup' %}makeup{% else %}regular{% endif %}">
                 <td class="fw-semibold">{{ s.course.code }}</td>
                 <td>{{ s.session_start_at|date:"Y-m-d" }}</td>
                 <td class="smart-muted">{{ s.session_start_at|date:"H:i" }}</td>
                 <td class="fw-semibold">{{ s.present_count }}</td>
                 <td class="smart-muted">{{ s.absent_count }}</td>
                 <td class="text-end">
-                  <div class="d-inline-flex gap-2">
+                  <div class="d-inline-flex align-items-center gap-2 flex-wrap justify-content-end">
                     <a class="btn btn-soft-blue btn-sm" href="{% url 'session_history' session_id=s.id %}">View</a>
+                    {% if s.session_type == 'makeup' %}
+                      <a class="btn btn-mini btn-sm" href="{% url 'makeup_session_code' session_id=s.id %}">Code</a>
+                    {% endif %}
                     {% if s.is_completed %}
-                      <span class="badge text-bg-success align-self-center">Completed</span>
+                      <span class="badge text-bg-success">Completed</span>
                     {% else %}
                       <a class="btn btn-open btn-sm" href="{% url 'mark_attendance_choice' session_id=s.id %}">Mark (Manual/Face)</a>
                     {% endif %}
@@ -108,6 +126,49 @@
       </div>
     {% else %}
       <div class="smart-muted">No sessions yet.</div>
+    {% endif %}
+  </div>
+
+  <div class="attendance-card glass-strong p-3 p-md-4 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <div class="fw-semibold">Faculty Workload Distribution</div>
+      <div class="smart-muted small">
+        Overloaded: {{ faculty_workload_counts.overloaded }} |
+        Balanced: {{ faculty_workload_counts.balanced }} |
+        Underloaded: {{ faculty_workload_counts.underloaded }} |
+        Unassigned: {{ faculty_workload_counts.unassigned }}
+      </div>
+    </div>
+
+    {% if faculty_workloads %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 table-clean">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Department</th>
+              <th>Email</th>
+              <th>Assigned (hrs/week)</th>
+              <th>Max</th>
+              <th class="text-end">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for f in faculty_workloads %}
+              <tr>
+                <td class="fw-semibold">{{ f.name }}</td>
+                <td class="smart-muted">{{ f.department }}</td>
+                <td class="smart-muted">{{ f.email }}</td>
+                <td class="smart-muted">{{ f.assigned_hours }}</td>
+                <td class="smart-muted">{{ f.max_hours }}</td>
+                <td class="text-end fw-semibold">{{ f.status }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="smart-muted">No faculty records found.</div>
     {% endif %}
   </div>
 
@@ -146,4 +207,49 @@
       <div class="smart-muted">No courses found. Create courses and assign faculty from Admin.</div>
     {% endif %}
   </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      const wrap = document.getElementById('facultyRecentFilters');
+      if (!wrap) return;
+
+      const rows = Array.from(document.querySelectorAll('.faculty-session-row'));
+      const btns = Array.from(wrap.querySelectorAll('button[data-filter]'));
+      let active = 'all';
+
+      function matches(row) {
+        if (active === 'all') return true;
+        if (active === 'upcoming') return (row.getAttribute('data-upcoming') || '0') === '1';
+        if (active === 'makeup') return (row.getAttribute('data-type') || '') === 'makeup';
+        return (row.getAttribute('data-status') || '') === active;
+      }
+
+      function apply() {
+        rows.forEach(function (row) {
+          row.style.display = matches(row) ? '' : 'none';
+        });
+      }
+
+      function setActive(next) {
+        active = next || 'all';
+        btns.forEach((b) => {
+          const isActive = (b.getAttribute('data-filter') || 'all') === active;
+          b.classList.toggle('btn-open', isActive);
+          b.classList.toggle('btn-mini', !isActive);
+        });
+        apply();
+      }
+
+      btns.forEach((b) => {
+        b.addEventListener('click', function () {
+          setActive(b.getAttribute('data-filter') || 'all');
+        });
+      });
+
+      setActive('all');
+    })();
+  </script>
 {% endblock %}

@@ -1,10 +1,15 @@
 from django.urls import path
 
 from . import views
-from .authz import require_teacher
+from .authz import require_student, require_teacher
 
 urlpatterns = [
     path("", require_teacher(views.home), name="home"),
+    path("student/", require_student(views.student_dashboard), name="student_dashboard"),
+    path("student/stats/", require_student(views.student_live_stats), name="student_live_stats"),
+    path("student/courses/", require_student(views.student_courses), name="student_courses"),
+    path("student/makeup/", require_student(views.student_makeup_sessions), name="student_makeup_sessions"),
+    path("student/attendance/", require_student(views.student_attendance_details), name="student_attendance_details"),
     path("attendance/", require_teacher(views.attendance_home), name="attendance_home"),
     path("faculty/", require_teacher(views.faculty_dashboard), name="faculty_dashboard"),
     path(
@@ -66,6 +71,31 @@ urlpatterns = [
     path("manage/sessions/", require_teacher(views.manage_sessions), name="manage_sessions"),
     path("manage/records/", require_teacher(views.manage_records), name="manage_records"),
     path("faculty/sessions/new/", require_teacher(views.create_session), name="create_session"),
+    path(
+        "faculty/sessions/makeup/new/",
+        require_teacher(views.create_makeup_session),
+        name="create_makeup_session",
+    ),
+    path(
+        "faculty/sessions/makeup/<int:session_id>/code/",
+        require_teacher(views.makeup_session_code),
+        name="makeup_session_code",
+    ),
+    path(
+        "faculty/classrooms/busy-check/",
+        require_teacher(views.classroom_busy_check),
+        name="classroom_busy_check",
+    ),
+    path(
+        "faculty/classrooms/available/",
+        require_teacher(views.available_classrooms),
+        name="available_classrooms",
+    ),
+    path(
+        "student/remedial/",
+        require_student(views.remedial_code_entry),
+        name="remedial_code_entry",
+    ),
     path(
         "faculty/sessions/<int:session_id>/edit/",
         require_teacher(views.edit_session),

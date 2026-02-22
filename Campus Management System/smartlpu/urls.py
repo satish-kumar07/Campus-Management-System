@@ -28,6 +28,7 @@ admin.site.index_title = 'CMS Administration'
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/login/', RoleAwareLoginView.as_view(), name='login'),
+    path('accounts/', include('accounts.urls')),
     path('accounts/', include('django.contrib.auth.urls')),
     path('dashboard/', include('analytics.urls')),
     path('food/', include('food_ordering.urls')),

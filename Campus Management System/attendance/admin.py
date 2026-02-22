@@ -117,8 +117,18 @@ class StudentAdmin(admin.ModelAdmin):
 
 @admin.register(AttendanceSession)
 class AttendanceSessionAdmin(admin.ModelAdmin):
-    list_display = ("course", "subject", "classroom", "session_start_at", "session_label", "created_at")
-    list_filter = ("course", "subject", "classroom", "session_start_at")
+    list_display = (
+        "course",
+        "session_type",
+        "remedial_code",
+        "remedial_expires_at",
+        "subject",
+        "classroom",
+        "session_start_at",
+        "session_label",
+        "created_at",
+    )
+    list_filter = ("course", "session_type", "subject", "classroom", "session_start_at")
     search_fields = ("course__code", "course__name", "session_label", "block")
 
 

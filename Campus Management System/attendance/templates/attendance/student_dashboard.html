@@ -1,0 +1,245 @@
+{% extends 'base.html' %}
+
+{% block title %}CMS - Student Dashboard{% endblock %}
+
+{% block content %}
+  <div class="glass-strong p-3 p-md-4 mb-3">
+    <div class="d-flex align-items-center justify-content-between">
+      <div>
+        <div class="fw-semibold">
+          {% if student %}
+            Welcome, {{ student.full_name }}
+          {% else %}
+            Welcome
+          {% endif %}
+        </div>
+        <div class="smart-muted small">
+          {% if student %}
+            Reg: {{ student.uid }}
+          {% else %}
+            Student Dashboard
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-4">
+      <a class="text-decoration-none text-reset" href="{% url 'student_courses' %}">
+        <div class="card shadow-sm h-100">
+          <div class="card-body d-flex align-items-center justify-content-between">
+            <div>
+              <div class="fw-semibold">Courses</div>
+              <div class="text-muted small">Enrolled</div>
+            </div>
+            <div class="h4 mb-0" id="sd-courses">{{ courses_count|default:0 }}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body d-flex align-items-center justify-content-between">
+          <div>
+            <div class="fw-semibold">Attendance</div>
+            <div class="text-muted small">Overall</div>
+          </div>
+          <div class="h4 mb-0" id="sd-attendance">{{ overall_attendance_pct|default:0 }}%</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-4">
+      <a class="text-decoration-none text-reset" href="{% url 'student_makeup_sessions' %}">
+        <div class="card shadow-sm h-100">
+          <div class="card-body d-flex align-items-center justify-content-between">
+            <div>
+              <div class="fw-semibold">Make-Up Pending</div>
+              <div class="text-muted small">Active</div>
+            </div>
+            <div class="h4 mb-0" id="sd-makeup">{{ makeup_pending|default:0 }}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-7">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="fw-semibold">Attendance Snapshot</div>
+          </div>
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-3">
+              <div id="sd-pie" style="width:84px; height:84px; border-radius:50%; background: conic-gradient(#198754 0deg, #e9ecef 0deg); position:relative;">
+                <div style="position:absolute; inset:10px; background:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; text-align:center;">
+                  <div>
+                    <div class="fw-semibold" id="sd-attendance-big">{{ overall_attendance_pct|default:0 }}%</div>
+                    <div class="text-muted" style="font-size:12px; line-height:1;">Overall</div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div class="fw-semibold">Attendance</div>
+                <div class="text-muted small">Present / Total Conducted</div>
+                <div class="mt-2 d-flex flex-wrap gap-2">
+                  <span class="badge text-bg-success">Present: <span class="fw-semibold" id="sd-present">{{ present|default:0 }}</span></span>
+                  <span class="badge text-bg-danger">Absent: <span class="fw-semibold" id="sd-absent">{{ absent|default:0 }}</span></span>
+                  <span class="badge text-bg-light text-dark">Pending: <span class="fw-semibold" id="sd-pending">{{ pending|default:0 }}</span></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="text-end">
+              <div class="text-muted small">Below Threshold</div>
+              <div class="h5 mb-0"><span class="fw-semibold" id="sd-below">{{ below_threshold_courses|default:0 }}</span> courses</div>
+            </div>
+          </div>
+          <div class="mt-3">
+            <a class="btn btn-outline-dark btn-sm" href="{% url 'student_attendance_details' %}">View</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-5">
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <div class="fw-semibold mb-2">Today’s Activity</div>
+          {% if next_session %}
+            <div class="fw-semibold" id="sd-next">{{ next_session.course.code }} - {{ next_session.session_start_at|date:"h:i A" }}</div>
+            <div class="text-muted small" id="sd-next-room">{% if next_session.classroom %}Room {{ next_session.classroom.room_number }}{% else %}Room -{% endif %}</div>
+          {% else %}
+            <div class="text-muted" id="sd-next">No upcoming classes.</div>
+            <div class="text-muted small" id="sd-next-room"></div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="fw-semibold mb-2">Remedial Attendance</div>
+          <form method="post" action="{% url 'remedial_code_entry' %}" class="row g-2">
+            {% csrf_token %}
+            <div class="col-8">
+              <input class="form-control" type="text" name="code" placeholder="Enter code..." required />
+            </div>
+            <div class="col-4 d-grid">
+              <button class="btn btn-dark" type="submit">Submit</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="fw-semibold">Recent Notifications</div>
+      </div>
+      {% if recent_notifications %}
+        <div class="row g-3" id="sd-notifs">
+          {% for n in recent_notifications %}
+            <div class="col-12 col-lg-6">
+              <div class="border rounded p-3 h-100">
+                <div class="small">{{ n.message }}</div>
+                <div class="text-muted small mt-1">{{ n.created_at|timesince }} ago</div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="text-muted" id="sd-notifs">No notifications yet.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ block.super }}
+  <script>
+    (function () {
+      const endpoint = "{% url 'student_live_stats' %}";
+      const elCourses = document.getElementById('sd-courses');
+      const elAttendance = document.getElementById('sd-attendance');
+      const elAttendanceBig = document.getElementById('sd-attendance-big');
+      const elBelow = document.getElementById('sd-below');
+      const elMakeup = document.getElementById('sd-makeup');
+      const elPresent = document.getElementById('sd-present');
+      const elAbsent = document.getElementById('sd-absent');
+      const elPending = document.getElementById('sd-pending');
+      const elPie = document.getElementById('sd-pie');
+      const elNext = document.getElementById('sd-next');
+      const elNextRoom = document.getElementById('sd-next-room');
+      const elNotifs = document.getElementById('sd-notifs');
+
+      const renderPie = (present, absent, pending) => {
+        const p = Math.max(0, parseInt(present || 0, 10));
+        const a = Math.max(0, parseInt(absent || 0, 10));
+        const pe = Math.max(0, parseInt(pending || 0, 10));
+        const total = p + a + pe;
+        const pDeg = total > 0 ? Math.round((p / total) * 360) : 0;
+        const aDeg = total > 0 ? Math.round((a / total) * 360) : 0;
+        const apDeg = Math.min(pDeg + aDeg, 360);
+        if (elPie) {
+          elPie.style.background = `conic-gradient(#198754 0deg ${pDeg}deg, #dc3545 ${pDeg}deg ${apDeg}deg, #e9ecef ${apDeg}deg 360deg)`;
+        }
+      };
+
+      const renderNotifs = (items) => {
+        if (!elNotifs) return;
+        if (!items || !items.length) {
+          elNotifs.className = 'text-muted';
+          elNotifs.textContent = 'No notifications yet.';
+          return;
+        }
+        elNotifs.className = 'row g-3';
+        elNotifs.innerHTML = items.map(n => (
+          `<div class="col-12 col-lg-6">
+            <div class="border rounded p-3 h-100">
+              <div class="small">${(n.message || '').replace(/</g,'&lt;')}</div>
+              <div class="text-muted small mt-1">${(n.ago || '-')}</div>
+            </div>
+          </div>`
+        )).join('');
+      };
+
+      const tick = async () => {
+        try {
+          const res = await fetch(endpoint, { headers: { 'Accept': 'application/json' } });
+          const data = await res.json();
+          if (!data || !data.ok) return;
+
+          if (elCourses) elCourses.textContent = data.courses_count ?? '0';
+          const att = `${data.overall_attendance_pct ?? 0}%`;
+          if (elAttendance) elAttendance.textContent = att;
+          if (elAttendanceBig) elAttendanceBig.textContent = att;
+          if (elBelow) elBelow.textContent = data.below_threshold_courses ?? '0';
+          if (elMakeup) elMakeup.textContent = data.makeup_pending ?? '0';
+          if (elPresent) elPresent.textContent = data.present ?? '0';
+          if (elAbsent) elAbsent.textContent = data.absent ?? '0';
+          if (elPending) elPending.textContent = data.pending ?? '0';
+          renderPie(data.present, data.absent, data.pending);
+
+          if (elNext) {
+            if (data.next_session && data.next_session.course) {
+              elNext.textContent = `${data.next_session.course} - ${data.next_session.time}`;
+              if (elNextRoom) elNextRoom.textContent = data.next_session.room ? `Room ${data.next_session.room}` : '';
+            } else {
+              elNext.textContent = 'No upcoming classes.';
+              if (elNextRoom) elNextRoom.textContent = '';
+            }
+          }
+
+          renderNotifs(data.notifications || []);
+        } catch (e) {
+        }
+      };
+
+      tick();
+      window.setInterval(tick, 10000);
+    })();
+  </script>
+{% endblock %}

@@ -27,10 +27,11 @@
 
   <div class="glass-strong p-3 p-md-4">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0 table-clean">
+      <table class="table table-hover align-middle mb-0 table-clean small">
         <thead>
           <tr>
             <th>Roll No</th>
+            <th>UID</th>
             <th>Name</th>
             <th>Email</th>
             <th>Parent Email</th>
@@ -42,17 +43,20 @@
           {% for s in students %}
             <tr>
               <td class="fw-semibold">{{ s.roll_no }}</td>
+              <td class="smart-muted">{{ s.uid|default:"-" }}</td>
               <td>{{ s.full_name }}</td>
-              <td class="smart-muted">{{ s.email }}</td>
-              <td class="smart-muted">{{ s.parent_email }}</td>
+              <td class="smart-muted" style="max-width: 220px; white-space: normal; word-break: break-word;">{{ s.email }}</td>
+              <td class="smart-muted" style="max-width: 220px; white-space: normal; word-break: break-word;">{{ s.parent_email }}</td>
               <td class="smart-muted">{{ s.parent_phone }}</td>
               <td class="text-end">
-                <a class="btn btn-outline-smart btn-sm" href="{% url 'manage_student_edit' student_id=s.id %}">Edit</a>
-                <a class="btn btn-outline-danger btn-sm" href="{% url 'manage_student_delete' student_id=s.id %}">Delete</a>
+                <div class="d-inline-flex gap-2">
+                  <a class="btn btn-outline-smart btn-sm" href="{% url 'manage_student_edit' student_id=s.id %}">Edit</a>
+                  <a class="btn btn-outline-danger btn-sm" href="{% url 'manage_student_delete' student_id=s.id %}">Delete</a>
+                </div>
               </td>
             </tr>
           {% empty %}
-            <tr><td colspan="6" class="smart-muted">No students yet.</td></tr>
+            <tr><td colspan="7" class="smart-muted">No students yet.</td></tr>
           {% endfor %}
         </tbody>
       </table>

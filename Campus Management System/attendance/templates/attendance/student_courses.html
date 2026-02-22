@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block title %}CMS - My Courses{% endblock %}
+
+{% block content %}
+  <div class="glass-strong p-3 p-md-4 mb-3">
+    <div class="d-flex align-items-center justify-content-between">
+      <div>
+        <div class="fw-semibold">My Courses</div>
+        {% if student %}
+          <div class="smart-muted small">{{ student.full_name }} | Reg: {{ student.uid }}</div>
+        {% endif %}
+      </div>
+      <a class="btn btn-outline-dark btn-sm" href="{% url 'student_dashboard' %}">Back</a>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      {% if rows %}
+        <div class="table-responsive">
+          <table class="table table-sm table-striped align-middle mb-0">
+            <thead>
+              <tr class="text-muted small">
+                <th>Course</th>
+                <th class="text-end">Attendance</th>
+                <th class="text-end">Total</th>
+                <th class="text-end">Present</th>
+                <th class="text-end">Absent</th>
+                <th class="text-end">Pending</th>
+                <th>Faculty</th>
+                <th class="text-end">Credits</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in rows %}
+                <tr>
+                  <td>
+                    <div class="fw-semibold">{{ r.course.code }}</div>
+                    <div class="text-muted small">{{ r.course.name }}</div>
+                  </td>
+                  <td class="text-end fw-semibold">{{ r.pct|default:0 }}%</td>
+                  <td class="text-end">{{ r.total_sessions|default:0 }}</td>
+                  <td class="text-end">{{ r.present|default:0 }}</td>
+                  <td class="text-end">{{ r.absent|default:0 }}</td>
+                  <td class="text-end">{{ r.pending|default:0 }}</td>
+                  <td>
+                    {% if r.course.faculty %}
+                      {{ r.course.faculty.name }}
+                    {% else %}
+                      <span class="text-muted">-</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">{{ r.course.credits|default:0 }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="text-muted small mt-2">Attendance % = Present / Total Conducted Classes (Regular + Make-Up)</div>
+      {% else %}
+        <div class="text-muted">No enrolled courses found.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

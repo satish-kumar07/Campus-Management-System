@@ -17,12 +17,32 @@
     </div>
   </div>
 
+  <div class="alert alert-info mb-3">
+    <div class="fw-semibold mb-1">How to mark attendance</div>
+    <div class="small">
+      <div class="mb-1"><strong>Option A: Upload Photo</strong></div>
+      <div>1) Click <strong>Start Camera</strong> (or upload a photo file).</div>
+      <div>2) Align faces, click <strong>Capture Photo</strong> (loads into the Photo field).</div>
+      <div>3) Click <strong>Upload Photo + Auto Mark</strong> to mark detected students as Present.</div>
+      <div class="mt-2 mb-1"><strong>Option B: Live Webcam</strong></div>
+      <div>1) Click <strong>Start Live Webcam</strong> to auto-mark continuously.</div>
+      <div>2) (Optional) Enable <strong>Require Blink</strong> for liveness.</div>
+      <div>3) Click <strong>Stop</strong> anytime. Use <strong>View History</strong> to confirm marked students.</div>
+    </div>
+  </div>
+
   <div class="row g-3">
     <div class="col-12 col-lg-6">
       <div class="glass-strong p-3 p-md-4">
         <div class="fw-semibold mb-2">Mark by Photo (Face Recognition)</div>
-        <div class="smart-muted small mb-2">Total {{ counts.total }} · Present {{ counts.present }} · Absent {{ counts.absent }} · Unmarked {{ counts.unmarked }}</div>
-        <form method="post" enctype="multipart/form-data" action="{% url 'mark_attendance_by_photo' session_id=session.id %}">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <div class="smart-muted small" id="countsLine">Total {{ counts.total }} · Present {{ counts.present }} · Absent {{ counts.absent }} · Unmarked {{ counts.unmarked }}</div>
+          <span class="badge text-bg-light" id="lastMarkedBadge">Last marked: 0</span>
+        </div>
+        <div class="smart-muted small mb-2">
+          Tip: You can use a <strong>group photo</strong> (multiple students in one image). To mark more students, click <strong>Capture Photo</strong> again (it replaces the photo) and click <strong>Upload Photo + Auto Mark</strong> again.
+        </div>
+        <form id="photoMarkForm" method="post" enctype="multipart/form-data" action="{% url 'mark_attendance_by_photo' session_id=session.id %}">
           {% csrf_token %}
           <div class="mb-2">
             <label class="form-label">Photo</label>
@@ -31,8 +51,8 @@
           </div>
 
           <div class="d-flex flex-wrap gap-2 mb-3">
-            <button class="btn btn-outline-smart btn-sm" type="button" id="livecam-start">Camera</button>
-            <button class="btn btn-outline-smart btn-sm" type="button" id="livecam-capture" disabled>Capture</button>
+            <button class="btn btn-outline-smart btn-sm" type="button" id="livecam-start">Start Camera</button>
+            <button class="btn btn-outline-smart btn-sm" type="button" id="livecam-capture" disabled>Capture Photo</button>
             <button class="btn btn-outline-smart btn-sm" type="button" id="livecam-stop" disabled>Stop</button>
           </div>
 
@@ -60,6 +80,9 @@
       <div class="glass-strong p-3 p-md-4">
         <div class="fw-semibold mb-2">Live Webcam Attendance</div>
         <div class="small smart-muted mb-2">Starts auto-marking present students continuously.</div>
+        <div class="small smart-muted mb-2">
+          Keep the camera running and let students come in front of it one-by-one; it will keep marking automatically while running.
+        </div>
 
         <div class="form-check form-switch mb-2">
           <input class="form-check-input" type="checkbox" role="switch" id="live-require-blink" />
@@ -67,7 +90,7 @@
         </div>
 
         <div class="d-flex flex-wrap gap-2 mb-2">
-          <button class="btn btn-outline-smart btn-sm" type="button" id="live-start">Start</button>
+          <button class="btn btn-outline-smart btn-sm" type="button" id="live-start">Start Live Webcam</button>
           <button class="btn btn-outline-smart btn-sm" type="button" id="live-stop" disabled>Stop</button>
         </div>
 
@@ -86,6 +109,53 @@
 
 {% block scripts %}
   {{ block.super }}
+  <script>
+    (function () {
+      const badge = document.getElementById('lastMarkedBadge');
+      const countsLine = document.getElementById('countsLine');
+      const form = document.getElementById('photoMarkForm');
+
+      function setLastMarked(n) {
+        if (!badge) return;
+        const v = Number.isFinite(Number(n)) ? Number(n) : 0;
+        badge.textContent = `Last marked: ${v}`;
+      }
+
+      function updateCounts(c) {
+        if (!countsLine || !c) return;
+        const total = c.total ?? '';
+        const present = c.present ?? '';
+        const absent = c.absent ?? '';
+        const unmarked = c.unmarked ?? '';
+        countsLine.textContent = `Total ${total} · Present ${present} · Absent ${absent} · Unmarked ${unmarked}`;
+      }
+
+      window.__cmsSetLastMarked = setLastMarked;
+      window.__cmsUpdateCounts = updateCounts;
+
+      if (!form) return;
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        try {
+          const fd = new FormData(form);
+          const res = await fetch(form.action, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: fd,
+          });
+          const data = await res.json();
+          if (!data || !data.ok) {
+            form.submit();
+            return;
+          }
+          setLastMarked(data.newly_marked || 0);
+          updateCounts(data.counts);
+        } catch (err) {
+          form.submit();
+        }
+      });
+    })();
+  </script>
   <script>
     (function () {
       const startBtn = document.getElementById('livecam-start');
@@ -274,6 +344,9 @@
           } else {
             const tm = (data.top_matches || []).map(m => `${m.id}:${Math.round(m.conf)}`).join('  ');
             setStatus(`Faces: ${data.faces_detected} | Pending: ${data.pending} | Present: ${data.present_detected} | Marked: ${data.newly_marked} | Trained: ${data.trained_faces} (${data.trained_students}) | Top: ${tm} | Eyes: ${data.eyes}${data.blink_recent ? ' | Blink OK' : ''}`);
+            if (typeof window.__cmsSetLastMarked === 'function') {
+              window.__cmsSetLastMarked(data.newly_marked || 0);
+            }
           }
         } catch (e) {
           setStatus('Live attendance failed.');

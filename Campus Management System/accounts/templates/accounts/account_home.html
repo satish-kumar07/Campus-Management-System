@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}CMS - My Account{% endblock %}
+
+{% block content %}
+  <div class="glass-strong p-3 p-md-4 mb-3">
+    <div class="d-flex align-items-center justify-content-between">
+      <div>
+        <div class="fw-semibold">My Account</div>
+        <div class="smart-muted small">Manage your profile and security.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-7">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="fw-semibold mb-2">Profile</div>
+          <div class="row g-2">
+            <div class="col-12 col-md-6">
+              <div class="text-muted small">Username</div>
+              <div class="fw-semibold">{{ user.username }}</div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="text-muted small">Email</div>
+              <div class="fw-semibold">{{ user.email|default:"-" }}</div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="text-muted small">First Name</div>
+              <div class="fw-semibold">{{ user.first_name|default:"-" }}</div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="text-muted small">Last Name</div>
+              <div class="fw-semibold">{{ user.last_name|default:"-" }}</div>
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 mt-3">
+            <a class="btn btn-dark btn-sm" href="{% url 'accounts:edit_profile' %}">Edit Profile</a>
+            <a class="btn btn-outline-dark btn-sm" href="{% url 'accounts:change_password' %}">Change Password</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="fw-semibold mb-2">Session</div>
+          <div class="text-muted small">Signed in as</div>
+          <div class="fw-semibold">{{ user.username }}</div>
+
+          <div class="mt-3">
+            <form method="post" action="{% url 'logout' %}">
+              {% csrf_token %}
+              <button class="btn btn-outline-dark btn-sm" type="submit">Logout</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

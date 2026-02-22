@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+
+{% block title %}CMS - Make-Up Classes{% endblock %}
+
+{% block content %}
+  <div class="glass-strong p-3 p-md-4 mb-3">
+    <div class="d-flex align-items-center justify-content-between">
+      <div>
+        <div class="fw-semibold">Make-Up Classes</div>
+        {% if student %}
+          <div class="smart-muted small">{{ student.full_name }} | Reg: {{ student.uid }}</div>
+        {% endif %}
+      </div>
+      <a class="btn btn-outline-dark btn-sm" href="{% url 'student_dashboard' %}">Back</a>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="fw-semibold">Pending</div>
+          <div class="text-muted small">Not marked & not expired</div>
+          <div class="h3 mb-0">{{ pending_count|default:0 }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="fw-semibold">How to mark attendance</div>
+          <div class="text-muted small">
+            Open <span class="fw-semibold">Remedial Code</span> from the sidebar and submit the code during class time.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-3">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Recent Make-Up Sessions</div>
+
+        {% if rows %}
+          <div class="row g-3">
+            {% for r in rows %}
+              <div class="col-12">
+                <div class="border rounded p-3">
+                  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                    <div>
+                      <div class="fw-semibold">
+                        {{ r.session.course.code }} - {{ r.session.course.name }}
+                      </div>
+                      <div class="text-muted small">
+                        {% if r.start_at %}{{ r.start_at|date:"d M Y, h:i A" }}{% endif %}
+                        {% if r.cutoff %} → {{ r.cutoff|date:"h:i A" }}{% endif %}
+                        {% if r.session.classroom %} | Room {{ r.session.classroom.room_number }}{% endif %}
+                      </div>
+                    </div>
+
+                    <div>
+                      {% if r.marked %}
+                        <span class="badge text-bg-success">Marked</span>
+                      {% elif r.is_active %}
+                        <span class="badge text-bg-primary">Active</span>
+                      {% elif r.is_upcoming %}
+                        <span class="badge text-bg-secondary">Upcoming</span>
+                      {% elif r.is_expired %}
+                        <span class="badge text-bg-danger">Expired</span>
+                      {% else %}
+                        <span class="badge text-bg-secondary">-</span>
+                      {% endif %}
+                    </div>
+                  </div>
+
+                  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
+                    <div>
+                      <div class="text-muted small">Remedial Code</div>
+                      <div class="fw-semibold" style="letter-spacing:1px;">{{ r.session.remedial_code|default:"-" }}</div>
+                    </div>
+                    <div class="d-flex gap-2">
+                      <button class="btn btn-light btn-sm" type="button" data-code="{{ r.session.remedial_code|default:'' }}" onclick="copyRemedialCode(this)">Copy</button>
+                      <a class="btn btn-outline-dark btn-sm" href="{% url 'remedial_code_entry' %}">Submit Code</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-muted">No make-up sessions found.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ block.super }}
+  <script>
+    function copyRemedialCode(btn) {
+      try {
+        const code = (btn.getAttribute('data-code') || '').trim();
+        if (!code) return;
+        navigator.clipboard.writeText(code);
+        btn.textContent = 'Copied';
+        window.setTimeout(() => { btn.textContent = 'Copy'; }, 1200);
+      } catch (e) {
+      }
+    }
+  </script>
+{% endblock %}

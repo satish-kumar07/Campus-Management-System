@@ -224,6 +224,151 @@
     </div>
   </div>
 
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+      <div class="dash-card glass-strong p-3 p-md-4 h-100">
+        <div class="fw-semibold">Make-Up Pending</div>
+        <div class="smart-muted small">Make-up sessions not yet ended</div>
+        <div class="d-flex justify-content-between align-items-end gap-2 mt-3">
+          <div class="display-6 mb-0">{{ makeup_pending|default:0 }}</div>
+          <a class="btn btn-open btn-sm" href="{% url 'create_makeup_session' %}">Create</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="dash-card glass-strong p-3 p-md-4 h-100">
+        <div class="fw-semibold">Upcoming Classes</div>
+        <div class="smart-muted small">Sessions scheduled in the future</div>
+        <div class="display-6 mb-0 mt-3">{{ upcoming_count|default:0 }}</div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="dash-card glass-strong p-3 p-md-4 h-100">
+        <div class="fw-semibold">Active Now</div>
+        <div class="smart-muted small">Ongoing sessions at this moment</div>
+        <div class="display-6 mb-0 mt-3">{{ active_now|default:0 }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dash-card glass-strong p-3 p-md-4 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <div class="fw-semibold">Upcoming Schedule</div>
+      <div class="smart-muted small">Next {{ upcoming_sessions|length }} class(es)</div>
+    </div>
+
+    {% if upcoming_sessions %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 table-clean">
+          <thead>
+            <tr>
+              <th>Course</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Type</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in upcoming_sessions %}
+              <tr>
+                <td class="fw-semibold">{{ s.course.code }} <span class="smart-muted">- {{ s.course.name }}</span></td>
+                <td>{{ s.session_start_at|date:"Y-m-d" }}</td>
+                <td class="smart-muted">{{ s.session_start_at|date:"H:i" }}</td>
+                <td>
+                  {% if s.session_type == 'makeup' %}
+                    <span class="badge text-bg-warning">Make-Up</span>
+                  {% else %}
+                    <span class="badge text-bg-light border">Regular</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="smart-muted">No upcoming classes scheduled.</div>
+    {% endif %}
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-xl-6">
+      <div class="dash-card glass-strong p-3 p-md-4 h-100">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <div class="fw-semibold">Resource Utilization (Top Classrooms)</div>
+          <div class="smart-muted small">Attendance records vs capacity</div>
+        </div>
+
+        {% if classroom_utilization %}
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 table-clean">
+              <thead>
+                <tr>
+                  <th>Classroom</th>
+                  <th>Block</th>
+                  <th>Capacity</th>
+                  <th>Sessions</th>
+                  <th>Records</th>
+                  <th class="text-end">Utilization</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in classroom_utilization %}
+                  <tr>
+                    <td class="fw-semibold">{{ r.classroom__room_number }}</td>
+                    <td class="smart-muted">{{ r.classroom__block__name }}</td>
+                    <td class="smart-muted">{{ r.classroom__capacity }}</td>
+                    <td class="smart-muted">{{ r.sessions_count }}</td>
+                    <td class="smart-muted">{{ r.records_count }}</td>
+                    <td class="text-end fw-semibold">{{ r.utilization_pct|floatformat:1 }}%</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="smart-muted">No utilization data yet. Create sessions and mark attendance to generate insights.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-6">
+      <div class="dash-card glass-strong p-3 p-md-4 h-100">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <div class="fw-semibold">Resource Utilization (Top Blocks)</div>
+          <div class="smart-muted small">Aggregated by block</div>
+        </div>
+
+        {% if block_utilization %}
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 table-clean">
+              <thead>
+                <tr>
+                  <th>Block</th>
+                  <th>Sessions</th>
+                  <th>Records</th>
+                  <th class="text-end">Utilization</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for b in block_utilization %}
+                  <tr>
+                    <td class="fw-semibold">{{ b.classroom__block__name }}</td>
+                    <td class="smart-muted">{{ b.sessions_count }}</td>
+                    <td class="smart-muted">{{ b.records_count }}</td>
+                    <td class="text-end fw-semibold">{{ b.utilization_pct|floatformat:1 }}%</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="smart-muted">No block utilization data yet.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
   <div class="quick-actions">
     <div class="fw-semibold mb-2">Quick Actions</div>
     <div class="qa-grid">

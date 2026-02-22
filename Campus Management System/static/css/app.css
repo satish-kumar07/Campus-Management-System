@@ -9,6 +9,55 @@
   --stroke: rgba(11, 18, 32, 0.10);
 }
 
+ html {
+   font-size: 15px;
+ }
+
+ body {
+   font-size: 0.95rem;
+   line-height: 1.45;
+ }
+
+ h1, .h1 { font-size: 1.55rem; }
+ h2, .h2 { font-size: 1.35rem; }
+ h3, .h3 { font-size: 1.20rem; }
+ h4, .h4 { font-size: 1.10rem; }
+ h5, .h5 { font-size: 1.00rem; }
+ h6, .h6 { font-size: 0.95rem; }
+
+ .display-6 { font-size: 1.70rem; }
+
+ .btn {
+   font-size: 0.9rem;
+   padding: 0.42rem 0.72rem;
+ }
+
+ .btn-sm {
+   font-size: 0.82rem;
+   padding: 0.30rem 0.55rem;
+ }
+
+ .form-label { font-size: 0.9rem; }
+ .form-text { font-size: 0.82rem; }
+
+ .form-control,
+ .form-select {
+   font-size: 0.9rem;
+   padding: 0.45rem 0.65rem;
+ }
+
+ .table {
+   font-size: 0.9rem;
+ }
+
+ .table > :not(caption) > * > * {
+   padding: 0.55rem 0.65rem;
+ }
+
+ .table-sm > :not(caption) > * > * {
+   padding: 0.35rem 0.55rem;
+ }
+
 
 .bg-surface {
   min-height: 100vh;

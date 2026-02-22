@@ -1,0 +1,229 @@
+{% extends 'base.html' %}
+{% block title %}CMS - Create Make-Up Session{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-9 col-xl-8">
+      <div class="form-shell glass-strong">
+        <div class="form-head px-4 px-md-5 pt-4 pt-md-5 pb-3">
+          <div class="h4 mb-1">Create Make-Up Session</div>
+          <div class="smart-muted">A unique remedial code will be generated for students.</div>
+        </div>
+
+        <div class="px-4 px-md-5 pb-4 pb-md-5">
+          <form method="post" class="row g-3">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+              <div class="col-12">
+                <div class="alert alert-danger mb-0">{{ form.non_field_errors|striptags }}</div>
+              </div>
+            {% endif %}
+
+            <div class="col-md-6">
+              <label class="form-label">Course</label>
+              {{ form.course }}
+              {% if form.course.errors %}<div class="text-danger small">{{ form.course.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Classroom</label>
+              {{ form.classroom }}
+              {% if form.classroom.errors %}<div class="text-danger small">{{ form.classroom.errors }}</div>{% endif %}
+              <div id="classroomBusyMsg" class="small mt-1"></div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Date</label>
+              {{ form.session_date }}
+              {% if form.session_date.errors %}<div class="text-danger small">{{ form.session_date.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Start Time</label>
+              {{ form.start_time }}
+              {% if form.start_time.errors %}<div class="text-danger small">{{ form.start_time.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">End Time</label>
+              {{ form.end_time }}
+              {% if form.end_time.errors %}<div class="text-danger small">{{ form.end_time.errors }}</div>{% endif %}
+              <div id="timeRangeMsg" class="small mt-1"></div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Mode</label>
+              {{ form.mode }}
+              {% if form.mode.errors %}<div class="text-danger small">{{ form.mode.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Attendance Mode</label>
+              {{ form.attendance_mode }}
+              {% if form.attendance_mode.errors %}<div class="text-danger small">{{ form.attendance_mode.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Reason</label>
+              {{ form.reason }}
+              {% if form.reason.errors %}<div class="text-danger small">{{ form.reason.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Session label (optional)</label>
+              {{ form.session_label }}
+              {% if form.session_label.errors %}<div class="text-danger small">{{ form.session_label.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12">
+              <div class="form-check">
+                {{ form.notify_students }}
+                <label class="form-check-label" for="{{ form.notify_students.id_for_label }}">Notify Students</label>
+              </div>
+              {% if form.notify_students.errors %}<div class="text-danger small">{{ form.notify_students.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col-12 d-flex flex-wrap gap-2 mt-2">
+              <button class="btn btn-open" type="submit">Create Make-Up Session</button>
+              <a class="btn btn-cancel" href="{% url 'attendance_home' %}">Cancel</a>
+            </div>
+          </form>
+
+          <div id="availableRooms" class="mt-3 p-3 border rounded" style="background:#fff; display:none;"></div>
+
+          <script>
+            (function() {
+              const classroomEl = document.getElementById('id_classroom');
+              const dateEl = document.getElementById('id_session_date');
+              const startEl = document.getElementById('id_start_time');
+              const endEl = document.getElementById('id_end_time');
+              const msgEl = document.getElementById('classroomBusyMsg');
+              const timeMsgEl = document.getElementById('timeRangeMsg');
+              const roomsEl = document.getElementById('availableRooms');
+
+              function setMsg(text, kind) {
+                if (!msgEl) return;
+                msgEl.textContent = text || '';
+                msgEl.classList.remove('text-danger', 'text-success', 'smart-muted');
+                if (kind === 'danger') msgEl.classList.add('text-danger');
+                else if (kind === 'success') msgEl.classList.add('text-success');
+                else msgEl.classList.add('smart-muted');
+              }
+
+              function setTimeMsg(text, kind) {
+                if (!timeMsgEl) return;
+                timeMsgEl.textContent = text || '';
+                timeMsgEl.classList.remove('text-danger', 'text-success', 'smart-muted');
+                if (kind === 'danger') timeMsgEl.classList.add('text-danger');
+                else if (kind === 'success') timeMsgEl.classList.add('text-success');
+                else timeMsgEl.classList.add('smart-muted');
+              }
+
+              async function checkBusy() {
+                if (!classroomEl || !dateEl || !startEl || !endEl) return;
+                const classroom = classroomEl.value;
+                const date = dateEl.value;
+                const start = startEl.value;
+                const end = endEl.value;
+
+                if (!classroom || !date || !start || !end) {
+                  setMsg('', 'muted');
+                  setTimeMsg('', 'muted');
+                  if (roomsEl) roomsEl.style.display = 'none';
+                  return;
+                }
+
+                if (end <= start) {
+                  setMsg('', 'muted');
+                  setTimeMsg('End time must be after start time.', 'danger');
+                  if (roomsEl) roomsEl.style.display = 'none';
+                  return;
+                }
+
+                setTimeMsg('', 'muted');
+
+                setMsg('Checking availability...', 'muted');
+                const url = `{% url 'classroom_busy_check' %}?classroom=${encodeURIComponent(classroom)}&date=${encodeURIComponent(date)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+                try {
+                  const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                  const data = await res.json();
+                  if (!data || !data.ok) {
+                    setMsg('', 'muted');
+                    return;
+                  }
+                  if (data.busy) {
+                    setMsg(data.message || 'Busy', 'danger');
+                  } else {
+                    setMsg(data.message || 'Available', 'success');
+                  }
+                } catch (e) {
+                  setMsg('', 'muted');
+                }
+              }
+
+              async function loadAvailableRooms() {
+                if (!roomsEl || !dateEl || !startEl || !endEl) return;
+                const date = dateEl.value;
+                const start = startEl.value;
+                const end = endEl.value;
+                if (!date || !start || !end || end <= start) {
+                  roomsEl.style.display = 'none';
+                  roomsEl.innerHTML = '';
+                  return;
+                }
+
+                const url = `{% url 'available_classrooms' %}?date=${encodeURIComponent(date)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+                try {
+                  const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                  const data = await res.json();
+                  if (!data || !data.ok) {
+                    roomsEl.style.display = 'none';
+                    roomsEl.innerHTML = '';
+                    return;
+                  }
+
+                  const items = data.items || [];
+                  if (!items.length) {
+                    roomsEl.style.display = 'block';
+                    roomsEl.innerHTML = `<div class="text-muted small">No empty classrooms found for this time.</div>`;
+                    return;
+                  }
+
+                  roomsEl.style.display = 'block';
+                  roomsEl.innerHTML = `
+                    <div class="fw-semibold small mb-1">Empty classrooms (tap to select)</div>
+                    <div class="d-flex flex-wrap gap-2">
+                      ${items.map(i => `<button type="button" class="btn btn-light btn-sm" data-id="${i.id}">${(i.label || '').replace(/</g,'&lt;')}</button>`).join('')}
+                    </div>
+                  `;
+                  Array.from(roomsEl.querySelectorAll('button[data-id]')).forEach(btn => {
+                    btn.addEventListener('click', () => {
+                      const id = btn.getAttribute('data-id');
+                      if (!id || !classroomEl) return;
+                      classroomEl.value = id;
+                      classroomEl.dispatchEvent(new Event('change'));
+                    });
+                  });
+                } catch (e) {
+                  roomsEl.style.display = 'none';
+                  roomsEl.innerHTML = '';
+                }
+              }
+
+              [classroomEl, dateEl, startEl, endEl].forEach((el) => {
+                if (el) el.addEventListener('change', checkBusy);
+              });
+
+              [dateEl, startEl, endEl].forEach((el) => {
+                if (el) el.addEventListener('change', loadAvailableRooms);
+              });
+
+              loadAvailableRooms();
+            })();
+          </script>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
