@@ -117,7 +117,11 @@ EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get('SMARTLPU_EMAIL_HOST_USER', os.environ.get('CMS_EMAIL_HOST_USER', ''))
-EMAIL_HOST_PASSWORD = os.environ.get('SMARTLPU_EMAIL_HOST_PASSWORD', os.environ.get('CMS_EMAIL_HOST_PASSWORD', ''))
+EMAIL_HOST_PASSWORD = (
+    os.environ.get('SMARTLPU_EMAIL_HOST_PASSWORD', os.environ.get('CMS_EMAIL_HOST_PASSWORD', ''))
+    .replace(' ', '')
+    .strip()
+)
 DEFAULT_FROM_EMAIL = os.environ.get(
     'SMARTLPU_DEFAULT_FROM_EMAIL',
     os.environ.get('CMS_DEFAULT_FROM_EMAIL', EMAIL_HOST_USER),

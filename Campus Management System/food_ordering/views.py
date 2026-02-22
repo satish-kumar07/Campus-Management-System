@@ -3,7 +3,9 @@ import secrets
 
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.conf import settings
 from django.core.cache import cache
+from django.core.mail import EmailMessage
 from django.db import transaction
 from django.db.models import Avg, Count, DecimalField, ExpressionWrapper, F, Q, Sum
 from django.db.models.functions import ExtractHour, TruncDate
@@ -12,11 +14,86 @@ from django.shortcuts import render
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 
+import logging
+
 from attendance.models import Student
 
 from .forms import PreOrderForm
 from .authz import require_student, require_vendor
 from .models import BreakSlot, FoodOrder, FoodOrderItem, FoodStall, MealDeal, MenuCategory, MenuItem, PickupSlotHold, SlotCapacity
+
+
+logger = logging.getLogger(__name__)
+
+
+def _send_order_confirmation_email(*, order: FoodOrder) -> tuple[bool, str]:
+    recipients: list[str] = []
+    student = getattr(order, "student", None)
+    if student is not None:
+        student_email = (getattr(student, "email", "") or "").strip()
+        if student_email:
+            recipients.append(student_email)
+    user = getattr(order, "ordered_by_user", None)
+    if user is not None:
+        user_email = (getattr(user, "email", "") or "").strip()
+        if user_email:
+            recipients.append(user_email)
+    recipients = sorted({r for r in recipients if r})
+    if not recipients:
+        return (False, "Missing recipient email")
+
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "") or getattr(settings, "EMAIL_HOST_USER", "")
+    if not (from_email or "").strip():
+        return (False, "Email not configured")
+
+    stall_name = getattr(getattr(order, "stall", None), "name", "")
+    slot = getattr(order, "break_slot", None)
+    slot_label = ""
+    if slot is not None:
+        slot_label = str(getattr(slot, "name", "") or "")
+        slot_date = getattr(slot, "slot_date", None)
+        if slot_date:
+            slot_label = f"{slot_label} ({slot_date})" if slot_label else str(slot_date)
+
+    subject = f"Order Confirmation - Order #{order.id}"
+    body = "Dear Student,\n\n"
+    body += "Your food order has been placed successfully.\n\n"
+    body += f"Order Details:\n- Order ID: {order.id}\n"
+    if stall_name:
+        body += f"- Stall: {stall_name}\n"
+    if slot_label:
+        body += f"- Pickup Slot: {slot_label}\n"
+    pickup_code = (getattr(order, "pickup_code", "") or "").strip()
+    if pickup_code:
+        body += f"- Pickup Code: {pickup_code}\n"
+
+    items = list(getattr(order, "items", []).all()) if hasattr(order, "items") else []
+    if items:
+        body += "\nItems:\n"
+        for oi in items:
+            name = getattr(getattr(oi, "menu_item", None), "name", "")
+            qty = getattr(oi, "qty", 0)
+            unit_price = getattr(oi, "unit_price", None)
+            if unit_price is not None:
+                body += f"- {name} x{qty} @ {unit_price}\n"
+            else:
+                body += f"- {name} x{qty}\n"
+
+    total_amount = getattr(order, "total_amount", None)
+    if total_amount is not None:
+        body += f"\nTotal Amount: {total_amount}\n"
+
+    body += "\nPlease keep your pickup code ready at the stall counter.\n\n"
+    body += "Regards,\nCampus Food Ordering\n"
+
+    try:
+        msg = EmailMessage(subject=subject, body=body, from_email=from_email, to=recipients)
+        msg.send(fail_silently=False)
+        return (True, "")
+    except Exception as e:
+        logger.exception("Order confirmation email failed for order_id=%s recipients=%s", order.id, recipients)
+        detail = f"{type(e).__name__}: {e}".strip()
+        return (False, f"SMTP send failed ({detail})")
 
 
 def _get_daily_recommendations() -> list[MenuItem]:
@@ -578,6 +655,11 @@ def confirm_pickup_slot(request: HttpRequest, stall_id: int) -> HttpResponse:
 
         _clear_preorder_payload(request, stall.id)
         messages.success(request, f"Order #{order.id} placed successfully.")
+        ok, reason = _send_order_confirmation_email(order=order)
+        if ok:
+            messages.info(request, "Order confirmation email sent.")
+        else:
+            messages.warning(request, f"Order confirmation email not sent: {reason}")
         return redirect("food_order_confirmation", order_id=order.id)
 
     remaining_seconds = max(int((hold.expires_at - timezone.now()).total_seconds()), 0)

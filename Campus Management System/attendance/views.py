@@ -217,7 +217,7 @@ def _send_absent_email(*, student: Student, session: AttendanceSession) -> tuple
     student_email = (getattr(student, "email", "") or "").strip()
     if parent_email:
         recipients.append(parent_email)
-    elif student_email:
+    if student_email:
         recipients.append(student_email)
     recipients = sorted({r for r in recipients if r})
     if not recipients:
@@ -227,20 +227,40 @@ def _send_absent_email(*, student: Student, session: AttendanceSession) -> tuple
     if not from_email:
         logger.error("Absent email not sent: DEFAULT_FROM_EMAIL/EMAIL_HOST_USER not configured")
         return (False, "Email not configured (DEFAULT_FROM_EMAIL/EMAIL_HOST_USER)")
-    subject = f"Attendance Alert: {student.full_name} marked absent ({session.course.code})"
-    body = (
-        "Dear Parent/Guardian,\n\n"
-        f"This is to inform you that {student.full_name} (Roll No: {student.roll_no}) "
-        f"was marked ABSENT for the course {session.course.code} on {session.session_date}."
-    )
-    if session.time_slot:
-        body += f"\nTime slot: {session.time_slot}"
-    if session.session_label:
-        body += f"\nSession: {session.session_label}"
-    body += (
-        "\n\nIf you believe this is an error, please reply to this email or contact the administration.\n"
-        "\nRegards,\nCMS Administration\n"
-    )
+    uid = getattr(student, "uid", "")
+    uid_str = str(uid) if uid is not None else ""
+    course_code = getattr(getattr(session, "course", None), "code", "")
+    course_name = getattr(getattr(session, "course", None), "name", "")
+    start_at = getattr(session, "session_start_at", None)
+    date_str = start_at.strftime("%Y-%m-%d") if start_at else str(getattr(session, "session_date", ""))
+    time_str = start_at.strftime("%H:%M") if start_at else (getattr(session, "time_slot", "") or "")
+    room = getattr(getattr(session, "classroom", None), "room_number", "")
+    label = getattr(session, "session_label", "") or ""
+
+    subject = f"Attendance Notice: Absent - {student.full_name} ({course_code})"
+
+    body = "Dear Parent/Guardian and Student,\n\n"
+    body += "This is an official attendance notification from the College Attendance Management System.\n\n"
+    body += "Student Details:\n"
+    body += f"- Name: {student.full_name}\n"
+    body += f"- UID: {uid_str}\n"
+    body += f"- Roll No: {student.roll_no}\n\n"
+    body += "Session Details:\n"
+    body += f"- Course: {course_code}"
+    if course_name:
+        body += f" - {course_name}"
+    body += "\n"
+    body += f"- Date: {date_str}\n"
+    if time_str:
+        body += f"- Time: {time_str}\n"
+    if room:
+        body += f"- Room: {room}\n"
+    if label:
+        body += f"- Session: {label}\n"
+
+    body += "\nStatus: ABSENT\n\n"
+    body += "If you believe this is incorrect, please contact the course instructor or the academic office within 24 hours.\n\n"
+    body += "Regards,\nAttendance Office\n"
     try:
         msg = EmailMessage(subject=subject, body=body, from_email=from_email, to=recipients)
         msg.send(fail_silently=False)
@@ -2067,6 +2087,7 @@ def mark_attendance_by_photo(request: HttpRequest, session_id: int) -> HttpRespo
 
     absentees = [s for s in students if s.id not in present_ids]
     email_failures: list[str] = []
+    email_sent = 0
     from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "") or getattr(settings, "EMAIL_HOST_USER", "")
     email_enabled = bool((from_email or "").strip())
     for s in absentees:
@@ -2079,9 +2100,22 @@ def mark_attendance_by_photo(request: HttpRequest, session_id: int) -> HttpRespo
             ok, reason = _send_absent_email(student=s, session=session)
             if not ok:
                 email_failures.append(f"{s.roll_no}: {reason}")
+            else:
+                email_sent += 1
 
     msg = f"Photo-based marking complete. Detected present: {len(present_ids)} | Absentees: {len(absentees)}"
     messages.success(request, msg)
+    if not email_enabled and absentees:
+        messages.warning(
+            request,
+            "Absent emails were not sent because email is not configured for this server process. "
+            "Set SMARTLPU_EMAIL_HOST_USER/SMARTLPU_EMAIL_HOST_PASSWORD/SMARTLPU_DEFAULT_FROM_EMAIL and restart the server.",
+        )
+    elif absentees:
+        messages.info(
+            request,
+            f"Absent email status: sent {email_sent}/{len(absentees)}. Failed: {len(email_failures)}.",
+        )
     if email_failures:
         preview = "; ".join(email_failures[:3])
         extra = "" if len(email_failures) <= 3 else f" (+{len(email_failures) - 3} more)"
@@ -2147,6 +2181,7 @@ def mark_attendance(request: HttpRequest, session_id: int) -> HttpResponse:
     # Absentee detection + notifications (simulated)
     absentees = [s for s in students if s.id not in present_ids]
     email_failures: list[str] = []
+    email_sent = 0
     from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "") or getattr(settings, "EMAIL_HOST_USER", "")
     email_enabled = bool((from_email or "").strip())
     for s in absentees:
@@ -2159,8 +2194,21 @@ def mark_attendance(request: HttpRequest, session_id: int) -> HttpResponse:
             ok, reason = _send_absent_email(student=s, session=session)
             if not ok:
                 email_failures.append(f"{s.roll_no}: {reason}")
+            else:
+                email_sent += 1
 
     messages.success(request, f"Attendance saved. Absentees: {len(absentees)}")
+    if not email_enabled and absentees:
+        messages.warning(
+            request,
+            "Absent emails were not sent because email is not configured for this server process. "
+            "Set SMARTLPU_EMAIL_HOST_USER/SMARTLPU_EMAIL_HOST_PASSWORD/SMARTLPU_DEFAULT_FROM_EMAIL and restart the server.",
+        )
+    elif absentees:
+        messages.info(
+            request,
+            f"Absent email status: sent {email_sent}/{len(absentees)}. Failed: {len(email_failures)}.",
+        )
     if email_failures:
         preview = "; ".join(email_failures[:3])
         extra = "" if len(email_failures) <= 3 else f" (+{len(email_failures) - 3} more)"
