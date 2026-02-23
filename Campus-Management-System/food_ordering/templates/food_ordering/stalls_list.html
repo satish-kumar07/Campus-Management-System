@@ -74,29 +74,21 @@
             {% with stall=card.stall popular=card.popular %}
             <div class="col-12 col-md-6 col-lg-4">
               <div class="card h-100 shadow-sm border-0 hover-shadow transition-all">
-                <!-- Stall Image -->
-                <div class="position-relative">
-                  <div class="ratio ratio-16x9 bg-light" style="overflow: hidden;">
-                    <div class="w-100 h-100 d-flex align-items-center justify-content-center text-muted bg-light">
-                      <div class="text-center">
-                        <div class="small">No Image</div>
-                      </div>
-                    </div>
-                  </div>
-                  <!-- Status Badge -->
-                  <div class="position-absolute top-0 end-0 m-2">
-                    <span class="badge bg-success bg-gradient shadow-sm">Open</span>
-                  </div>
-                </div>
-
                 <!-- Card Body -->
                 <div class="card-body d-flex flex-column p-3">
+                  <div class="d-flex align-items-start justify-content-between mb-2">
+                    <div>
+                      <h5 class="card-title fw-bold mb-1">{{ stall.name }}</h5>
+                      {% if stall.location %}
+                        <p class="card-text text-muted small mb-0">{{ stall.location }}</p>
+                      {% endif %}
+                    </div>
+                    <span class="badge bg-success bg-gradient shadow-sm">Open</span>
+                  </div>
+
                   <!-- Stall Name & Location -->
                   <div class="mb-2">
-                    <h5 class="card-title fw-bold mb-1">{{ stall.name }}</h5>
-                    {% if stall.location %}
-                      <p class="card-text text-muted small mb-0">{{ stall.location }}</p>
-                    {% endif %}
+                    
                   </div>
 
                   <!-- Rating & Price Range -->
