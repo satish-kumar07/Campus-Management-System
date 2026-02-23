@@ -77,20 +77,11 @@
                 <!-- Stall Image -->
                 <div class="position-relative">
                   <div class="ratio ratio-16x9 bg-light" style="overflow: hidden;">
-                    {% if stall.image %}
-                      <img 
-                        src="{{ stall.image.url }}" 
-                        alt="{{ stall.name }}" 
-                        class="w-100 h-100" 
-                        style="object-fit: cover;"
-                      />
-                    {% else %}
-                      <div class="w-100 h-100 d-flex align-items-center justify-content-center text-muted bg-light">
-                        <div class="text-center">
-                          <div class="small">No Image</div>
-                        </div>
+                    <div class="w-100 h-100 d-flex align-items-center justify-content-center text-muted bg-light">
+                      <div class="text-center">
+                        <div class="small">No Image</div>
                       </div>
-                    {% endif %}
+                    </div>
                   </div>
                   <!-- Status Badge -->
                   <div class="position-absolute top-0 end-0 m-2">

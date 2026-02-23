@@ -146,7 +146,13 @@ def _get_current_student(request: HttpRequest):
 @login_required
 @require_student
 def food_home(request: HttpRequest) -> HttpResponse:
-    is_vendor = bool(getattr(request.user, "groups", None) and request.user.groups.filter(name="VENDOR").exists())
+    is_vendor = bool(
+        (getattr(request.user, "groups", None) and request.user.groups.filter(name="VENDOR").exists())
+        or getattr(request.user, "operated_food_categories", None)
+        and request.user.operated_food_categories.exists()
+        or getattr(request.user, "operated_food_stalls", None)
+        and request.user.operated_food_stalls.exists()
+    )
     daily_recommendations = _get_daily_recommendations()
     daily_meal_deals = _get_daily_meal_deals()
     return render(
@@ -371,11 +377,22 @@ def _active_holds_qs(stall: FoodStall):
 
 def _capacity_snapshot(stall: FoodStall, slot: BreakSlot) -> dict:
     cap = SlotCapacity.objects.filter(stall=stall, break_slot=slot).first()
-    if not cap or not cap.is_open:
+    if not cap:
         return {
-            "is_open": False,
+            "is_open": True,
             "max_orders": 0,
             "max_items": 0,
+            "used_orders": 0,
+            "used_items": 0,
+            "remaining_orders": 10**9,
+            "remaining_items": 10**9,
+        }
+
+    if not cap.is_open:
+        return {
+            "is_open": False,
+            "max_orders": int(getattr(cap, "max_orders", 0) or 0),
+            "max_items": int(getattr(cap, "max_items", 0) or 0),
             "used_orders": 0,
             "used_items": 0,
             "remaining_orders": 0,
@@ -487,9 +504,11 @@ def select_pickup_slot(request: HttpRequest, stall_id: int) -> HttpResponse:
     prep_minutes = _compute_prep_minutes(selected)
     now = timezone.now()
     today = timezone.localdate()
+    latest_day = today + timezone.timedelta(days=1)
 
     slots = list(
-        BreakSlot.objects.filter(is_active=True, slot_date=today).order_by("start_time")
+        BreakSlot.objects.filter(is_active=True, slot_date__gte=today, slot_date__lte=latest_day)
+        .order_by("slot_date", "start_time")
     )
 
     slot_cards: list[dict] = []
@@ -498,7 +517,9 @@ def select_pickup_slot(request: HttpRequest, stall_id: int) -> HttpResponse:
         feasible = True
         try:
             start_dt = _slot_start_dt(slot)
-            if prep_minutes > 0 and now + timezone.timedelta(minutes=prep_minutes) > start_dt:
+            if now > start_dt:
+                feasible = False
+            if feasible and prep_minutes > 0 and now + timezone.timedelta(minutes=prep_minutes) > start_dt:
                 feasible = False
         except Exception:
             feasible = False
@@ -510,6 +531,14 @@ def select_pickup_slot(request: HttpRequest, stall_id: int) -> HttpResponse:
             if snap["remaining_items"] < int(requested_items):
                 can_fit = False
 
+        reason = ""
+        if not snap["is_open"]:
+            reason = "closed"
+        elif not feasible:
+            reason = "not_feasible"
+        elif snap["remaining_orders"] < 1 or snap["remaining_items"] < int(requested_items):
+            reason = "full"
+
         slot_cards.append(
             {
                 "slot": slot,
@@ -518,6 +547,7 @@ def select_pickup_slot(request: HttpRequest, stall_id: int) -> HttpResponse:
                 "can_fit": can_fit,
                 "remaining_items": snap["remaining_items"],
                 "remaining_orders": snap["remaining_orders"],
+                "reason": reason,
             }
         )
 
@@ -606,8 +636,8 @@ def confirm_pickup_slot(request: HttpRequest, stall_id: int) -> HttpResponse:
         _set_preorder_payload(request, stall.id, payload)
         return redirect("food_select_pickup_slot", stall_id=stall.id)
 
-    if hold.break_slot and hold.break_slot.slot_date != timezone.localdate():
-        messages.error(request, "Pickup slot must be for today. Please select a slot again.")
+    if hold.break_slot and hold.break_slot.slot_date < timezone.localdate():
+        messages.error(request, "Pickup slot expired. Please select a slot again.")
         payload.pop("hold_id", None)
         _set_preorder_payload(request, stall.id, payload)
         return redirect("food_select_pickup_slot", stall_id=stall.id)

@@ -8,7 +8,6 @@ from attendance.models import Student
 class FoodStall(models.Model):
     name = models.CharField(max_length=128, unique=True)
     location = models.CharField(max_length=128, blank=True)
-    image = models.ImageField(upload_to="food_stalls/", null=True, blank=True)
     is_active = models.BooleanField(default=True)
     max_items_per_day = models.PositiveIntegerField(default=0)
     operators = models.ManyToManyField(

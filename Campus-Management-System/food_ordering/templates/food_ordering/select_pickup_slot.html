@@ -80,6 +80,7 @@
                       <div>
                         <div class="fw-semibold">{{ c.slot.start_time }}–{{ c.slot.end_time }}</div>
                         <div class="text-muted small">
+                          <div>{{ c.slot.slot_date }}</div>
                           {% if not c.is_open %}
                             Closed
                           {% elif not c.feasible %}
@@ -93,6 +94,10 @@
 
                     {% if c.can_fit %}
                       <span class="badge text-bg-success">Available</span>
+                    {% elif not c.is_open %}
+                      <span class="badge text-bg-secondary">Closed</span>
+                    {% elif not c.feasible %}
+                      <span class="badge text-bg-warning">Too late</span>
                     {% else %}
                       <span class="badge text-bg-danger">Full</span>
                     {% endif %}

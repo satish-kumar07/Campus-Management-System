@@ -17,7 +17,7 @@ from .models import (
 
 @admin.register(FoodStall)
 class FoodStallAdmin(admin.ModelAdmin):
-    list_display = ("name", "location", "image", "is_active", "max_items_per_day")
+    list_display = ("name", "location", "is_active", "max_items_per_day")
     list_filter = ("is_active",)
     search_fields = ("name", "location")
     filter_horizontal = ("operators",)

@@ -6,11 +6,6 @@
   <!-- Header Section -->
   <div class="d-flex align-items-center justify-content-between mb-4">
     <div class="d-flex align-items-center gap-3">
-      {% if stall.image %}
-        <div class="rounded overflow-hidden shadow-sm" style="width: 80px; height: 60px;">
-          <img src="{{ stall.image.url }}" alt="{{ stall.name }}" class="w-100 h-100" style="object-fit: cover;" />
-        </div>
-      {% endif %}
       <div>
         <h3 class="fw-bold mb-1">{{ stall.name }}</h3>
         {% if stall.location %}
