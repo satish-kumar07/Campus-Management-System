@@ -1,5 +1,7 @@
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import Group
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.db import transaction
@@ -28,6 +30,11 @@ from faculty.models import Faculty
 
 from classrooms.models import Classroom
 
+from food_ordering.models import FoodStall, MenuCategory, MenuItem
+
+
+User = get_user_model()
+
 from .face_recognition import (
     build_training_set,
     detect_eyes_count,
@@ -39,6 +46,10 @@ from .forms import (
     AttendancePhotoUploadForm,
     AttendanceSessionCreateForm,
     MakeupSessionCreateForm,
+    VendorCreateForm,
+    FoodStallManageForm,
+    MenuCategoryManageForm,
+    MenuItemManageForm,
     RemedialCodeEntryForm,
     CourseCreateForm,
     EnrollmentForm,
@@ -1105,6 +1116,10 @@ def manage_dashboard(request: HttpRequest) -> HttpResponse:
         "notifications": Notification.objects.count(),
         "sessions": AttendanceSession.objects.count(),
         "records": AttendanceRecord.objects.count(),
+        "vendors": User.objects.filter(groups__name="VENDOR").distinct().count(),
+        "food_stalls": FoodStall.objects.count(),
+        "menu_categories": MenuCategory.objects.count(),
+        "menu_items": MenuItem.objects.count(),
     }
 
     return render(
@@ -1113,6 +1128,215 @@ def manage_dashboard(request: HttpRequest) -> HttpResponse:
         {
             "stats": stats,
         },
+    )
+
+
+@login_required
+@require_teacher
+def manage_vendors(request: HttpRequest) -> HttpResponse:
+    vendors = (
+        User.objects.filter(groups__name="VENDOR")
+        .order_by("username")
+        .distinct()
+    )
+    return render(request, "attendance/manage/vendors.html", {"vendors": vendors})
+
+
+@login_required
+@require_teacher
+def manage_vendor_create(request: HttpRequest) -> HttpResponse:
+    if request.method == "POST":
+        form = VendorCreateForm(request.POST)
+        if form.is_valid():
+            username = form.cleaned_data["username"]
+            email = (form.cleaned_data.get("email") or "").strip().lower()
+            password = form.cleaned_data["password1"]
+            stalls = list(form.cleaned_data.get("stalls") or [])
+
+            user = User.objects.create_user(username=username, email=email, password=password)
+            group, _ = Group.objects.get_or_create(name="VENDOR")
+            user.groups.add(group)
+
+            for s in stalls:
+                try:
+                    s.operators.add(user)
+                except Exception:
+                    continue
+
+            messages.success(request, "Vendor created.")
+            return redirect("manage_vendors")
+    else:
+        form = VendorCreateForm()
+    return render(request, "attendance/manage/form.html", {"form": form, "title": "Add Vendor"})
+
+
+@login_required
+@require_teacher
+def manage_vendor_delete(request: HttpRequest, user_id: int) -> HttpResponse:
+    u = get_object_or_404(User, id=user_id)
+    if request.method == "POST":
+        u.delete()
+        messages.success(request, "Vendor deleted.")
+        return redirect("manage_vendors")
+    return render(
+        request,
+        "attendance/manage/confirm_delete.html",
+        {"object": u, "type": "Vendor", "cancel_url": "manage_vendors"},
+    )
+
+
+@login_required
+@require_teacher
+def manage_food_stalls(request: HttpRequest) -> HttpResponse:
+    stalls = FoodStall.objects.prefetch_related("operators").order_by("name")
+    return render(request, "attendance/manage/food_stalls.html", {"stalls": stalls})
+
+
+@login_required
+@require_teacher
+def manage_food_stall_create(request: HttpRequest) -> HttpResponse:
+    if request.method == "POST":
+        form = FoodStallManageForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Food stall created.")
+            return redirect("manage_food_stalls")
+    else:
+        form = FoodStallManageForm()
+    return render(request, "attendance/manage/form.html", {"form": form, "title": "Add Food Stall"})
+
+
+@login_required
+@require_teacher
+def manage_food_stall_edit(request: HttpRequest, stall_id: int) -> HttpResponse:
+    stall = get_object_or_404(FoodStall, id=stall_id)
+    if request.method == "POST":
+        form = FoodStallManageForm(request.POST, instance=stall)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Food stall updated.")
+            return redirect("manage_food_stalls")
+    else:
+        form = FoodStallManageForm(instance=stall)
+    return render(request, "attendance/manage/form.html", {"form": form, "title": "Edit Food Stall"})
+
+
+@login_required
+@require_teacher
+def manage_food_stall_delete(request: HttpRequest, stall_id: int) -> HttpResponse:
+    stall = get_object_or_404(FoodStall, id=stall_id)
+    if request.method == "POST":
+        stall.delete()
+        messages.success(request, "Food stall deleted.")
+        return redirect("manage_food_stalls")
+    return render(
+        request,
+        "attendance/manage/confirm_delete.html",
+        {"object": stall, "type": "Food Stall", "cancel_url": "manage_food_stalls"},
+    )
+
+
+@login_required
+@require_teacher
+def manage_menu_categories(request: HttpRequest) -> HttpResponse:
+    categories = MenuCategory.objects.select_related("stall").prefetch_related("operators").order_by(
+        "stall__name", "sort_order", "name"
+    )
+    return render(request, "attendance/manage/menu_categories.html", {"categories": categories})
+
+
+@login_required
+@require_teacher
+def manage_menu_category_create(request: HttpRequest) -> HttpResponse:
+    if request.method == "POST":
+        form = MenuCategoryManageForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Menu category created.")
+            return redirect("manage_menu_categories")
+    else:
+        form = MenuCategoryManageForm()
+    return render(request, "attendance/manage/form.html", {"form": form, "title": "Add Menu Category"})
+
+
+@login_required
+@require_teacher
+def manage_menu_category_edit(request: HttpRequest, category_id: int) -> HttpResponse:
+    cat = get_object_or_404(MenuCategory, id=category_id)
+    if request.method == "POST":
+        form = MenuCategoryManageForm(request.POST, instance=cat)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Menu category updated.")
+            return redirect("manage_menu_categories")
+    else:
+        form = MenuCategoryManageForm(instance=cat)
+    return render(request, "attendance/manage/form.html", {"form": form, "title": "Edit Menu Category"})
+
+
+@login_required
+@require_teacher
+def manage_menu_category_delete(request: HttpRequest, category_id: int) -> HttpResponse:
+    cat = get_object_or_404(MenuCategory, id=category_id)
+    if request.method == "POST":
+        cat.delete()
+        messages.success(request, "Menu category deleted.")
+        return redirect("manage_menu_categories")
+    return render(
+        request,
+        "attendance/manage/confirm_delete.html",
+        {"object": cat, "type": "Menu Category", "cancel_url": "manage_menu_categories"},
+    )
+
+
+@login_required
+@require_teacher
+def manage_menu_items(request: HttpRequest) -> HttpResponse:
+    items = MenuItem.objects.select_related("stall", "category").order_by("stall__name", "name")
+    return render(request, "attendance/manage/menu_items.html", {"items": items})
+
+
+@login_required
+@require_teacher
+def manage_menu_item_create(request: HttpRequest) -> HttpResponse:
+    if request.method == "POST":
+        form = MenuItemManageForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Menu item created.")
+            return redirect("manage_menu_items")
+    else:
+        form = MenuItemManageForm()
+    return render(request, "attendance/manage/form.html", {"form": form, "title": "Add Menu Item"})
+
+
+@login_required
+@require_teacher
+def manage_menu_item_edit(request: HttpRequest, item_id: int) -> HttpResponse:
+    it = get_object_or_404(MenuItem, id=item_id)
+    if request.method == "POST":
+        form = MenuItemManageForm(request.POST, instance=it)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Menu item updated.")
+            return redirect("manage_menu_items")
+    else:
+        form = MenuItemManageForm(instance=it)
+    return render(request, "attendance/manage/form.html", {"form": form, "title": "Edit Menu Item"})
+
+
+@login_required
+@require_teacher
+def manage_menu_item_delete(request: HttpRequest, item_id: int) -> HttpResponse:
+    it = get_object_or_404(MenuItem, id=item_id)
+    if request.method == "POST":
+        it.delete()
+        messages.success(request, "Menu item deleted.")
+        return redirect("manage_menu_items")
+    return render(
+        request,
+        "attendance/manage/confirm_delete.html",
+        {"object": it, "type": "Menu Item", "cancel_url": "manage_menu_items"},
     )
 
 

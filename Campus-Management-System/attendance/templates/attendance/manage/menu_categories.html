@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}CMS - Menu Categories{% endblock %}
+
+{% block content %}
+  <div class="glass-strong p-4 p-md-5 mb-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div>
+        <h1 class="h5 mb-1">Menu Categories</h1>
+        <div class="smart-muted">Create categories per stall and assign vendor operators (optional).</div>
+      </div>
+      <div class="d-flex gap-2 align-items-center">
+        <a class="btn btn-smart text-white" href="{% url 'manage_menu_category_create' %}">Add Category</a>
+        <a class="btn btn-outline-smart" href="{% url 'manage_dashboard' %}">Back</a>
+      </div>
+    </div>
+    <div class="top-tabs mt-3">
+      <a href="{% url 'manage_students' %}">Students</a>
+      <a href="{% url 'manage_faculty' %}">Faculty</a>
+      <a href="{% url 'manage_courses' %}">Courses</a>
+      <a href="{% url 'manage_blocks' %}">Blocks</a>
+      <a href="{% url 'manage_classrooms' %}">Classrooms</a>
+      <a href="{% url 'manage_enrollments' %}">Enrollments</a>
+      <a href="{% url 'manage_face_samples' %}">Face Data</a>
+      <a href="{% url 'manage_notifications' %}">Notifications</a>
+      <a href="{% url 'manage_vendors' %}">Vendors</a>
+      <a href="{% url 'manage_food_stalls' %}">Food Stalls</a>
+      <a href="{% url 'manage_menu_categories' %}">Menu Categories</a>
+      <a href="{% url 'manage_menu_items' %}">Menu Items</a>
+    </div>
+  </div>
+
+  <div class="glass-strong p-3 p-md-4">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 table-clean small">
+        <thead>
+          <tr>
+            <th>Stall</th>
+            <th>Name</th>
+            <th>Sort</th>
+            <th>Operators</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in categories %}
+            <tr>
+              <td class="fw-semibold">{{ c.stall.name }}</td>
+              <td>{{ c.name }}</td>
+              <td class="smart-muted">{{ c.sort_order }}</td>
+              <td class="smart-muted" style="max-width: 320px; white-space: normal; word-break: break-word;">
+                {% if c.operators.all %}
+                  {% for u in c.operators.all %}
+                    <span class="badge text-bg-light border">{{ u.username }}</span>
+                  {% endfor %}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <div class="d-inline-flex gap-2">
+                  <a class="btn btn-outline-smart btn-sm" href="{% url 'manage_menu_category_edit' category_id=c.id %}">Edit</a>
+                  <a class="btn btn-outline-danger btn-sm" href="{% url 'manage_menu_category_delete' category_id=c.id %}">Delete</a>
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="smart-muted">No categories yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

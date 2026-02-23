@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from django import forms
+from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.utils import timezone
 
@@ -11,6 +12,133 @@ from classrooms.models import Classroom
 from blocks.models import Block
 
 from .models import AttendanceSession, FaceSample, Student
+
+from food_ordering.models import FoodStall, MenuCategory, MenuItem
+
+
+User = get_user_model()
+
+
+class VendorCreateForm(forms.Form):
+    username = forms.CharField(
+        max_length=150,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Vendor username"}),
+    )
+    email = forms.EmailField(
+        required=False,
+        widget=forms.EmailInput(attrs={"class": "form-control", "placeholder": "Vendor email (optional)"}),
+    )
+    password1 = forms.CharField(
+        widget=forms.PasswordInput(attrs={"class": "form-control", "placeholder": "Password"}),
+        label="Password",
+    )
+    password2 = forms.CharField(
+        widget=forms.PasswordInput(attrs={"class": "form-control", "placeholder": "Confirm password"}),
+        label="Confirm Password",
+    )
+    stalls = forms.ModelMultipleChoiceField(
+        queryset=FoodStall.objects.none(),
+        required=False,
+        widget=forms.SelectMultiple(attrs={"class": "form-select"}),
+        help_text="Assign this vendor as operator for selected stalls.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["stalls"].queryset = FoodStall.objects.order_by("name")
+
+    def clean_username(self):
+        username = (self.cleaned_data.get("username") or "").strip()
+        if not username:
+            raise forms.ValidationError("Username is required.")
+        if User.objects.filter(username__iexact=username).exists():
+            raise forms.ValidationError("A user with this username already exists.")
+        return username
+
+    def clean_email(self):
+        email = (self.cleaned_data.get("email") or "").strip().lower()
+        if email and User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError("A user with this email already exists.")
+        return email
+
+    def clean(self):
+        cleaned = super().clean()
+        p1 = cleaned.get("password1") or ""
+        p2 = cleaned.get("password2") or ""
+        if p1 != p2:
+            raise forms.ValidationError("Passwords do not match.")
+        if not p1:
+            raise forms.ValidationError("Password is required.")
+        return cleaned
+
+
+class FoodStallManageForm(forms.ModelForm):
+    class Meta:
+        model = FoodStall
+        fields = ["name", "location", "is_active", "max_items_per_day", "operators"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "name" in self.fields:
+            self.fields["name"].widget.attrs.update({"class": "form-control", "placeholder": "Stall name"})
+        if "location" in self.fields:
+            self.fields["location"].widget.attrs.update(
+                {"class": "form-control", "placeholder": "Location (optional)"}
+            )
+        if "is_active" in self.fields:
+            self.fields["is_active"].widget.attrs.update({"class": "form-check-input"})
+        if "max_items_per_day" in self.fields:
+            self.fields["max_items_per_day"].widget.attrs.update({"class": "form-control"})
+        if "operators" in self.fields:
+            self.fields["operators"].queryset = User.objects.order_by("username")
+            self.fields["operators"].widget.attrs.update({"class": "form-select"})
+
+
+class MenuCategoryManageForm(forms.ModelForm):
+    class Meta:
+        model = MenuCategory
+        fields = ["stall", "name", "sort_order", "operators"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "stall" in self.fields:
+            self.fields["stall"].queryset = FoodStall.objects.order_by("name")
+            self.fields["stall"].widget.attrs.update({"class": "form-select"})
+            self.fields["stall"].empty_label = "Select a stall"
+        if "name" in self.fields:
+            self.fields["name"].widget.attrs.update({"class": "form-control", "placeholder": "Category name"})
+        if "sort_order" in self.fields:
+            self.fields["sort_order"].widget.attrs.update({"class": "form-control"})
+        if "operators" in self.fields:
+            self.fields["operators"].queryset = User.objects.order_by("username")
+            self.fields["operators"].widget.attrs.update({"class": "form-select"})
+
+
+class MenuItemManageForm(forms.ModelForm):
+    class Meta:
+        model = MenuItem
+        fields = ["stall", "category", "name", "price", "is_available", "prep_time_minutes"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "stall" in self.fields:
+            self.fields["stall"].queryset = FoodStall.objects.order_by("name")
+            self.fields["stall"].widget.attrs.update({"class": "form-select"})
+            self.fields["stall"].empty_label = "Select a stall"
+        if "category" in self.fields:
+            self.fields["category"].queryset = MenuCategory.objects.select_related("stall").order_by(
+                "stall__name", "sort_order", "name"
+            )
+            self.fields["category"].widget.attrs.update({"class": "form-select"})
+            self.fields["category"].required = False
+        if "name" in self.fields:
+            self.fields["name"].widget.attrs.update({"class": "form-control", "placeholder": "Item name"})
+        if "price" in self.fields:
+            self.fields["price"].widget.attrs.update({"class": "form-control"})
+        if "is_available" in self.fields:
+            self.fields["is_available"].widget.attrs.update({"class": "form-check-input"})
+        if "prep_time_minutes" in self.fields:
+            self.fields["prep_time_minutes"].widget.attrs.update({"class": "form-control"})
 
 
 class MultipleFileInput(forms.ClearableFileInput):

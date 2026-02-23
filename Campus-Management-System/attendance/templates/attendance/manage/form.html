@@ -20,6 +20,10 @@
             {% url 'manage_face_samples' as manage_face_url %}
             {% url 'manage_sessions' as manage_sessions_url %}
             {% url 'manage_notifications' as manage_notifications_url %}
+            {% url 'manage_vendors' as manage_vendors_url %}
+            {% url 'manage_food_stalls' as manage_food_stalls_url %}
+            {% url 'manage_menu_categories' as manage_menu_categories_url %}
+            {% url 'manage_menu_items' as manage_menu_items_url %}
 
             <a class="tab-pill {% if request.path == manage_home_url %}is-active{% endif %}" href="{{ manage_home_url }}">Manage Home</a>
             <a class="tab-pill {% if request.path|slice:':15' == manage_students_url %}is-active{% endif %}" href="{{ manage_students_url }}">Students</a>
@@ -31,6 +35,10 @@
             <a class="tab-pill {% if request.path|slice:':16' == manage_face_url %}is-active{% endif %}" href="{{ manage_face_url }}">Face Data</a>
             <a class="tab-pill {% if request.path|slice:':14' == manage_sessions_url %}is-active{% endif %}" href="{{ manage_sessions_url }}">Sessions</a>
             <a class="tab-pill {% if request.path|slice:':19' == manage_notifications_url %}is-active{% endif %}" href="{{ manage_notifications_url }}">Notifications</a>
+            <a class="tab-pill {% if request.path|slice:':14' == manage_vendors_url %}is-active{% endif %}" href="{{ manage_vendors_url }}">Vendors</a>
+            <a class="tab-pill {% if request.path|slice:':17' == manage_food_stalls_url %}is-active{% endif %}" href="{{ manage_food_stalls_url }}">Food Stalls</a>
+            <a class="tab-pill {% if request.path|slice:':20' == manage_menu_categories_url %}is-active{% endif %}" href="{{ manage_menu_categories_url }}">Menu Categories</a>
+            <a class="tab-pill {% if request.path|slice:':15' == manage_menu_items_url %}is-active{% endif %}" href="{{ manage_menu_items_url }}">Menu Items</a>
           </div>
         </div>
 
