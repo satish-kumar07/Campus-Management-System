@@ -71,14 +71,29 @@ WSGI_APPLICATION = 'smartlpu.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': Path(
-            os.environ.get(
-                'SMARTLPU_SQLITE_PATH',
-                os.environ.get('CMS_SQLITE_PATH', str(BASE_DIR / 'db.sqlite3')),
-            )
-        ),
+        'NAME': None,
     }
 }
+
+_sqlite_candidate = os.environ.get(
+    'SMARTLPU_SQLITE_PATH',
+    os.environ.get('CMS_SQLITE_PATH', str(BASE_DIR / 'db.sqlite3')),
+)
+
+def _pick_sqlite_path(candidate: str) -> Path:
+    p = Path(candidate)
+    try:
+        parent = p.parent
+        parent.mkdir(parents=True, exist_ok=True)
+        test_path = parent / ".__sqlite_write_test__"
+        test_path.write_text("ok", encoding="utf-8")
+        test_path.unlink(missing_ok=True)
+        return p
+    except Exception:
+        return BASE_DIR / 'db.sqlite3'
+
+
+DATABASES['default']['NAME'] = _pick_sqlite_path(_sqlite_candidate)
 
 
 AUTH_PASSWORD_VALIDATORS = [
