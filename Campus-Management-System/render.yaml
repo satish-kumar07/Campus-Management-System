@@ -6,8 +6,7 @@ services:
     buildCommand: |
       pip install -r requirements.txt
       python manage.py collectstatic --noinput
-      python manage.py migrate
-    startCommand: gunicorn smartlpu.wsgi:application
+    startCommand: python manage.py migrate && gunicorn smartlpu.wsgi:application
     healthCheckPath: /
     envVars:
       - key: SMARTLPU_DEBUG
